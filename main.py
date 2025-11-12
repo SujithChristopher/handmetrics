@@ -598,74 +598,94 @@ class HandAnnotationWithMeasurements(QMainWindow):
         """Create left control panel."""
         group = QGroupBox("Controls")
         layout = QVBoxLayout()
+        layout.setSpacing(10)
 
         # Load Image
-        load_btn = QPushButton("Load Image")
+        load_btn = QPushButton("📂 Load Image")
+        load_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+        load_btn.setMinimumHeight(40)
         load_btn.clicked.connect(self.load_image)
         layout.addWidget(load_btn)
 
         # Finger Selection
-        layout.addWidget(QLabel("Select Finger:"))
+        finger_label = QLabel("Select Finger:")
+        finger_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF;")
+        layout.addWidget(finger_label)
         self.finger_combo = QComboBox()
         self.finger_combo.addItems(["Thumb", "Index", "Middle", "Ring", "Pinky"])
         self.finger_combo.setCurrentIndex(-1)  # Start with no selection
+        self.finger_combo.setStyleSheet("font-size: 11px; padding: 5px; border-radius: 3px; border: 1px solid #bbb;")
+        self.finger_combo.setMinimumHeight(32)
         self.finger_combo.currentTextChanged.connect(self.on_finger_selected)
         layout.addWidget(self.finger_combo)
 
         # Point counter
-        layout.addWidget(QLabel("Points Added:"))
+        points_label = QLabel("Points Added:")
+        points_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF;")
+        layout.addWidget(points_label)
         self.point_counter = QLabel("0 / 4")
-        self.point_counter.setStyleSheet("font-size: 14px; font-weight: bold; color: blue;")
+        self.point_counter.setStyleSheet("font-size: 16px; font-weight: bold; color: #2196F3; padding: 8px; background-color: #f0f8ff; border-radius: 3px;")
         layout.addWidget(self.point_counter)
 
         # Point labels
-        layout.addWidget(QLabel("\nPoint Labels:"))
+        labels_title = QLabel("Point Labels:")
+        labels_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF; margin-top: 10px;")
+        layout.addWidget(labels_title)
         for i in range(4):
             label_text = ["Start", "Joint 1", "Joint 2", "End"][i]
-            layout.addWidget(QLabel(f"Point {i}: {label_text}"))
+            label = QLabel(f"  {i}: {label_text}")
+            label.setStyleSheet("font-size: 10px; color: #E0E0E0;")
+            layout.addWidget(label)
 
         # Measurement section
-        layout.addSpacing(20)
-        layout.addWidget(QLabel("📏 Measurements:"))
+        layout.addSpacing(15)
+        measurements_title = QLabel("📏 Measurements:")
+        measurements_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #1a5490;")
+        layout.addWidget(measurements_title)
 
         self.scale_status = QLabel("No scale")
-        self.scale_status.setStyleSheet("color: gray; font-weight: bold;")
+        self.scale_status.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF; padding: 6px; background-color: #f5f5f5; border-radius: 3px;")
         layout.addWidget(self.scale_status)
 
         self.scale_value = QLabel("")
-        self.scale_value.setStyleSheet("color: blue; font-size: 10px;")
+        self.scale_value.setStyleSheet("font-size: 10px; color: #2196F3; padding: 4px;")
         layout.addWidget(self.scale_value)
 
         # Toggle measurements display
         self.toggle_measurements = QPushButton("Show Measurements")
         self.toggle_measurements.setCheckable(True)
+        self.toggle_measurements.setStyleSheet("background-color: #d0d0d0; color: #000000; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        self.toggle_measurements.setMinimumHeight(32)
         self.toggle_measurements.clicked.connect(self.toggle_measurements_display)
-        self.toggle_measurements.setStyleSheet("background-color: #cccccc;")
         layout.addWidget(self.toggle_measurements)
 
         # Action buttons
-        layout.addSpacing(20)
+        layout.addSpacing(15)
 
-        undo_btn = QPushButton("Undo Last Point")
-        undo_btn.setStyleSheet("background-color: #ffaa00;")
+        undo_btn = QPushButton("↶ Undo Last Point")
+        undo_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        undo_btn.setMinimumHeight(32)
         undo_btn.clicked.connect(self.undo_point)
         layout.addWidget(undo_btn)
 
-        clear_finger_btn = QPushButton("Clear Current Finger")
-        clear_finger_btn.setStyleSheet("background-color: #ff6600;")
+        clear_finger_btn = QPushButton("🗑️ Clear Current Finger")
+        clear_finger_btn.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        clear_finger_btn.setMinimumHeight(32)
         clear_finger_btn.clicked.connect(self.clear_current_finger)
         layout.addWidget(clear_finger_btn)
 
-        clear_all_btn = QPushButton("Clear All")
-        clear_all_btn.setStyleSheet("background-color: #ff0000; color: white;")
+        clear_all_btn = QPushButton("⚠️ Clear All")
+        clear_all_btn.setStyleSheet("background-color: #F44336; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        clear_all_btn.setMinimumHeight(32)
         clear_all_btn.clicked.connect(self.clear_all)
         layout.addWidget(clear_all_btn)
 
-        layout.addSpacing(20)
+        layout.addSpacing(15)
 
         # Generate PDF Report
         report_btn = QPushButton("📄 Generate Report (PDF)")
-        report_btn.setStyleSheet("background-color: #0066cc; color: white; font-weight: bold;")
+        report_btn.setStyleSheet("background-color: #0066cc; color: white; font-weight: bold; font-size: 11px; padding: 10px; border-radius: 5px;")
+        report_btn.setMinimumHeight(44)
         report_btn.clicked.connect(self.generate_pdf_report)
         layout.addWidget(report_btn)
 
@@ -676,58 +696,66 @@ class HandAnnotationWithMeasurements(QMainWindow):
     def create_right_panel(self) -> QGroupBox:
         """Create right panel for displaying landmarks and measurements."""
         group = QGroupBox("Data")
+        group.setStyleSheet("font-size: 11px; font-weight: bold;")
         layout = QVBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
         # Tab widget for switching between landmarks and measurements
         self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("QTabWidget { font-size: 10px; } QTabBar::tab { padding: 6px 12px; margin: 2px; }")
 
         # Tab 1: Landmarks
         landmarks_tab = QWidget()
         landmarks_layout = QVBoxLayout(landmarks_tab)
-        landmarks_layout.setContentsMargins(5, 5, 5, 5)
-        landmarks_layout.setSpacing(5)
+        landmarks_layout.setContentsMargins(8, 8, 8, 8)
+        landmarks_layout.setSpacing(8)
 
-        landmarks_layout.addWidget(QLabel("AprilTags Detected:"))
+        apriltag_title = QLabel("AprilTags Detected:")
+        apriltag_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490;")
+        landmarks_layout.addWidget(apriltag_title)
         self.apriltag_label = QLabel("None")
         self.apriltag_label.setWordWrap(True)
-        self.apriltag_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; max-height: 50px;")
+        self.apriltag_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; max-height: 50px; border-radius: 3px; font-size: 10px;")
         landmarks_layout.addWidget(self.apriltag_label)
 
-        landmarks_layout.addWidget(QLabel("Hand Landmarks:"))
+        landmarks_header = QLabel("Hand Landmarks:")
+        landmarks_header.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490; margin-top: 8px;")
+        landmarks_layout.addWidget(landmarks_header)
 
         scroll1 = QScrollArea()
         scroll1.setWidgetResizable(True)
-        scroll1.setStyleSheet("QScrollArea { border: 1px solid #cccccc; }")
+        scroll1.setStyleSheet("QScrollArea { border: 1px solid #ddd; border-radius: 3px; background-color: white; }")
         self.landmarks_widget = QWidget()
         self.landmarks_layout = QVBoxLayout(self.landmarks_widget)
-        self.landmarks_layout.setContentsMargins(2, 2, 2, 2)
-        self.landmarks_layout.setSpacing(2)
+        self.landmarks_layout.setContentsMargins(4, 4, 4, 4)
+        self.landmarks_layout.setSpacing(3)
         scroll1.setWidget(self.landmarks_widget)
         landmarks_layout.addWidget(scroll1, 1)  # Give scroll area maximum stretch
 
         # Tab 2: Measurements
         measurements_tab = QWidget()
         measurements_layout = QVBoxLayout(measurements_tab)
-        measurements_layout.setContentsMargins(5, 5, 5, 5)
-        measurements_layout.setSpacing(5)
+        measurements_layout.setContentsMargins(8, 8, 8, 8)
+        measurements_layout.setSpacing(8)
 
-        measurements_layout.addWidget(QLabel("📏 Joint Distances:"))
+        measurements_header = QLabel("📏 Joint Distances:")
+        measurements_header.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490;")
+        measurements_layout.addWidget(measurements_header)
 
         scroll2 = QScrollArea()
         scroll2.setWidgetResizable(True)
-        scroll2.setStyleSheet("QScrollArea { border: 1px solid #cccccc; }")
+        scroll2.setStyleSheet("QScrollArea { border: 1px solid #ddd; border-radius: 3px; background-color: white; }")
         self.measurements_widget = QWidget()
         self.measurements_layout = QVBoxLayout(self.measurements_widget)
-        self.measurements_layout.setContentsMargins(2, 2, 2, 2)
-        self.measurements_layout.setSpacing(2)
+        self.measurements_layout.setContentsMargins(4, 4, 4, 4)
+        self.measurements_layout.setSpacing(3)
         scroll2.setWidget(self.measurements_widget)
         measurements_layout.addWidget(scroll2, 1)  # Give scroll area maximum stretch
 
-        # Add tabs
-        self.tab_widget.addTab(landmarks_tab, "Landmarks")
-        self.tab_widget.addTab(measurements_tab, "Measurements")
+        # Add tabs with improved styling
+        self.tab_widget.addTab(landmarks_tab, "📍 Landmarks")
+        self.tab_widget.addTab(measurements_tab, "📐 Measurements")
 
         layout.addWidget(self.tab_widget, 1)  # Give tab widget maximum stretch
         group.setLayout(layout)

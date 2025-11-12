@@ -1,74 +1,61 @@
-# Hand Pose and AprilTag Detection
+# HandMetrics
 
-Professional tools for hand pose detection and manual landmark annotation with AprilTag support.
+Professional hand joint annotation and measurement system with AprilTag calibration. Generate comprehensive PDF reports of hand measurements with visual annotations.
 
 ## 🎯 Quick Start
 
 ### Installation
 
 ```bash
-# Install all dependencies
+# Clone the repository
+git clone <repository-url>
+cd handmetrics
+
+# Install dependencies (Python 3.13+)
 pip install -r requirements.txt
+
+# Run the application
+python main.py
 ```
 
-### Two Approaches
+### Key Features
 
-#### 1. Automatic Detection (Fast)
+#### HandMetrics GUI (Primary Tool)
 ```bash
-python hand_pose_apriltag_detector.py
+python main.py
 ```
-- ✅ Fast automatic detection using MediaPipe
-- ✅ Saves plots to `plots/` folder
-- ❌ May have accuracy issues with certain hand positions
-
-#### 2. Manual Annotation GUI (Accurate)
-```bash
-python hand_annotation_gui.py
-```
-- ✅ Precise manual landmark annotation
-- ✅ Visual feedback and real-time updates
-- ✅ AprilTag detection included
-- ✅ Save to JSON format
+- ✅ Real-time hand joint annotation
+- ✅ AprilTag auto-detection for pixel-to-cm conversion
+- ✅ Measurement display on image
+- ✅ **Generate comprehensive PDF reports** with annotated images and measurements
+- ✅ Professional A4 PDF format, single-page output
+- ✅ Reports saved to `Documents/HandMetrics/reports/`
 
 ---
 
-## 📋 Tools Overview
+## 📋 Main Application
 
-### 1. Automatic Hand Pose Detection
-**File:** `hand_pose_apriltag_detector.py`
+### HandMetrics GUI
+**File:** `main.py`
 
-Automatically detects hand poses and AprilTag markers in batch.
-
-**Features:**
-- MediaPipe-based hand detection
-- AprilTag detection (tag36h11)
-- Batch processing of multiple images
-- Matplotlib visualization with color-coded landmarks
-- Console output with detection statistics
-
-**Usage:**
-```bash
-python hand_pose_apriltag_detector.py
-```
-
-**Output:** PNG plots saved to `plots/detected_*.png`
-
----
-
-### 2. Manual Hand Joint Annotation GUI
-**File:** `hand_annotation_gui.py`
-
-Interactive GUI for precise manual annotation of hand landmarks with visual feedback.
+Complete hand annotation and measurement system with PDF report generation.
 
 **Features:**
-- **Finger-by-Finger Selection**: Annotate one finger at a time
-- **4 Points Per Finger**: Start (base), Joint 1, Joint 2, End (tip)
-- **Real-time Visualization**: See points overlaid on image
-- **AprilTag Auto-Detection**: Automatic detection and display
-- **Point Tracking**: Counter shows progress (X/4)
-- **Undo/Clear Functions**: Correct mistakes easily
-- **JSON Export**: Save landmarks in structured format
-- **Single Hand Mode**: Focused on one hand per session
+- **Real-time Annotation**: Click to place hand joint landmarks
+- **Finger Selection**: Choose from 5 fingers (Thumb, Index, Middle, Ring, Pinky)
+- **4 Points Per Finger**: Annotate Start, Joint 1, Joint 2, and End (Tip)
+- **AprilTag Calibration**: Automatic detection for accurate pixel-to-cm conversion
+- **Measurement Display**: Real-time measurement overlay on image
+- **📄 PDF Reports**: Generate professional A4 reports with:
+  - Annotated image (with all landmarks and measurements visible)
+  - Joint distance measurements (in cm and pixels)
+  - Scale calibration information
+  - Image metadata and timestamp
+- **Point Management**:
+  - Undo last point
+  - Clear current finger points
+  - Clear all landmarks
+- **Single Hand Mode**: Focused on one hand per annotation session
 
 **Supported Fingers:**
 - Thumb
@@ -79,61 +66,40 @@ Interactive GUI for precise manual annotation of hand landmarks with visual feed
 
 **Usage:**
 ```bash
-python hand_annotation_gui.py
-```
-
-**Output:** JSON file with landmarks and AprilTag info
-
----
-
-### 3. Landmark Viewer Utility
-**File:** `view_landmarks.py`
-
-View and visualize saved hand landmarks.
-
-**Usage:**
-```bash
-python view_landmarks.py hand_landmarks.json
+python main.py
 ```
 
 **Output:**
-- Displays image with landmarks overlaid
-- Prints detailed coordinate information
-- Shows detected AprilTags
+- PDF Reports saved to `~/Documents/HandMetrics/reports/HandMetrics_*.pdf`
 
----
-
-### 4. Format Converter
-**File:** `convert_landmarks.py`
-
-Convert manual annotations to MediaPipe format.
-
-**Usage:**
-```bash
-python convert_landmarks.py hand_landmarks.json hand_landmarks_mediapipe.json
-```
-
-**Converts:**
-- Manual format (4 points per finger) → MediaPipe format (21 landmarks)
-- Normalizes coordinates to [0.0, 1.0] range
+**Report Format:**
+- A4 page size (single page)
+- Professional styling
+- Includes annotated image showing landmarks and measurements
+- Joint distance measurements table
+- Scale calibration info
 
 ---
 
 ## 📁 Project Structure
 
 ```
-hand_pose/
-├── images/                              # Input images
-│   ├── WhatsApp Image 2025-10-30 at 17.30.34.jpeg
-│   └── WhatsApp Image 2025-10-30 at 17.30.57.jpeg
-├── plots/                               # Auto-detection output (created automatically)
-├── hand_pose_apriltag_detector.py       # Auto-detection script
-├── hand_annotation_gui.py               # Manual annotation GUI ⭐ NEW
-├── view_landmarks.py                    # Landmark viewer utility
-├── convert_landmarks.py                 # Format converter
-├── requirements.txt                     # Dependencies
+handmetrics/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                       # GitHub CI/CD workflow
+│       └── release.yml                  # Release workflow
+├── images/                              # Input images folder
+├── main.py                              # ⭐ Main HandMetrics GUI application
+├── requirements.txt                     # Python dependencies
+├── .gitignore                           # Git ignore rules
 ├── README.md                            # This file
-└── README_GUI.md                        # Detailed GUI documentation
+└── CLAUDE.md                            # Development guide
+
+# Output Directories (Created Automatically)
+~/Documents/
+└── HandMetrics/
+    └── reports/                         # Generated PDF reports
 ```
 
 ---
@@ -141,28 +107,38 @@ hand_pose/
 ## 🖼️ GUI Interface Design
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Hand Joint Annotation Tool                                  │
-├──────────────┬──────────────────────────┬──────────────────┤
-│  CONTROLS    │    IMAGE CANVAS          │   LANDMARKS      │
-│              │                          │                  │
-│ Load Image   │                          │ AprilTags:       │
-│              │ Click to add joints      │ - ID: 11         │
-│ Select       │                          │                  │
-│ Finger ▼     │ [Image with Points]      │ Thumb (3/4)      │
-│ Thumb        │                          │ - Start: (100,200)
-│              │ • Green = fingers        │ - Joint1: (110,190)
-│ Point        │ • Lines = skeleton       │ - Joint2: (120,180)
-│ Counter      │ • Green box = AprilTag   │                  │
-│ 3 / 4        │                          │ Index (0/4)      │
-│              │                          │ Middle (0/4)     │
-│ [Undo]       │                          │ Ring (0/4)       │
-│ [Clear Fngr] │                          │ Pinky (0/4)      │
-│ [Clear All]  │                          │                  │
-│              │                          │ [Scroll]         │
-│ [Save] ✓     │                          │                  │
-└──────────────┴──────────────────────────┴──────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ HandMetrics - Hand Joint Annotation Tool                        │
+├──────────────┬───────────────────────────────┬────────────────┤
+│  CONTROLS    │    IMAGE CANVAS               │   DATA DISPLAY │
+│              │                               │                │
+│ Load Image   │                               │ ┌─ Landmarks ─┐
+│              │ Click to add joints           │ │ AprilTags:   │
+│ Select       │                               │ │ - ID: 11     │
+│ Finger ▼     │ [Image with Points]           │ │              │
+│ (Blank)      │                               │ │ Thumb (3/4)  │
+│              │ • Blue = thumb                │ │ - Start      │
+│ Point        │ • Green = index               │ │ - Joint 1    │
+│ Counter      │ • Red = middle                │ │ - Joint 2    │
+│ 3 / 4        │ • Cyan = ring                 │ │ - End        │
+│              │ • Magenta = pinky             │ │              │
+│ Measurements │ • Lines = connections         │ └──────────────┘
+│ ✓ Calibrated │ • Green box = AprilTag        │ ┌─ Measurements─┐
+│ • 5.34 px/cm │ • Distances in cm             │ │ Thumb         │
+│              │                               │ │ J0→1: 2.65 cm │
+│ [Undo]       │                               │ │ J1→2: 3.12 cm │
+│ [Clear Fngr] │                               │ │ J2→3: 2.41 cm │
+│ [Clear All]  │                               │ │ Index         │
+│              │                               │ │ J0→1: 2.89 cm │
+│ [Generate    │                               │ │ ...            │
+│  Report PDF] │                               │ └──────────────┘
+└──────────────┴───────────────────────────────┴────────────────┘
 ```
+
+**Three-Panel Layout:**
+- **Left (20%)**: Controls and measurements
+- **Center (60%)**: Image canvas with annotations
+- **Right (20%)**: Data display with tabs for Landmarks & Measurements
 
 ---
 
@@ -216,12 +192,13 @@ Landmarks 17-20: Pinky (MCP, PIP, DIP, Tip)
 
 1. **Load Image**
    - Click "Load Image"
-   - AprilTags auto-detected
-   - Image displays with detection results
+   - AprilTag auto-detected
+   - Image displays with calibration info
 
 2. **Select Finger**
    - Choose from dropdown (Thumb, Index, Middle, Ring, Pinky)
    - Single hand mode only
+   - Starts blank - select to begin
 
 3. **Annotate (Click on Image)**
    - **Point 0**: Start (wrist/palm base)
@@ -230,144 +207,206 @@ Landmarks 17-20: Pinky (MCP, PIP, DIP, Tip)
    - **Point 3**: End (fingertip)
 
 4. **Monitor Progress**
-   - Counter shows X/4
-   - Coordinates displayed in right panel
-   - Points shown on image in real-time
+   - Counter shows X/4 for current finger
+   - Measurements display in real-time
+   - Points shown on image with color coding
+   - Right panel shows landmarks and measurements
 
 5. **Corrections**
-   - Undo: Remove last point
-   - Clear Current: Clear finger's points
-   - Clear All: Start over
+   - **Undo**: Remove last point
+   - **Clear Current**: Clear finger's points
+   - **Clear All**: Start over with all fingers
 
-6. **Save**
-   - Click "Save Landmarks"
-   - Choose filename
-   - Saves as JSON with all data
+6. **Generate Report**
+   - Click "📄 Generate Report (PDF)"
+   - Professional A4 PDF created automatically
+   - Includes:
+     - Annotated image with visible landmarks
+     - Joint distance measurements
+     - Scale calibration info
+     - Timestamp and image details
+   - Saved to `~/Documents/HandMetrics/reports/`
 
 ---
 
 ## 📦 Dependencies
 
+**Python Version:** 3.13+
+
 ```
-opencv-python>=4.7.0       # Image processing and ArUco detection
-mediapipe>=0.10.0          # Hand detection (auto-detection only)
-PySide6>=6.5.0             # GUI framework (annotation tool only)
-numpy>=1.21.0              # Numerical operations
-matplotlib>=3.5.0          # Plotting and visualization
-apriltag>=0.2.0            # AprilTag detection (optional)
+opencv-contrib-python>=4.12.0       # Image processing and AprilTag detection
+PySide6>=6.5.0                      # GUI framework
+numpy>=1.21.0                       # Numerical operations
+matplotlib>=3.5.0                   # Visualization (utilities)
+reportlab>=4.0.0                    # PDF report generation
+Pillow>=10.0.0                      # Image processing for PDF
 ```
 
-Install all at once:
+**Install all at once:**
 ```bash
 pip install -r requirements.txt
 ```
+
+**Platform Support:**
+- ✅ Windows 10/11
+- ✅ macOS
+- ❌ Linux (untested)
 
 ---
 
 ## 🚀 Usage Examples
 
-### Example 1: Automatic Detection with Visualization
+### Example 1: Launch HandMetrics Application
 
 ```bash
-python hand_pose_apriltag_detector.py
-# Output: plots/detected_image_name.png
+python main.py
 ```
 
-### Example 2: Manual Annotation
+The GUI window opens with three panels:
+- **Left**: Controls and measurement info
+- **Center**: Image canvas for annotation
+- **Right**: Data display with tabs
+
+### Example 2: Complete Annotation Workflow
 
 ```bash
-python hand_annotation_gui.py
-# 1. Load image from images/ folder
-# 2. Select finger (e.g., "Index")
-# 3. Click 4 times on image to mark joints
-# 4. Repeat for other fingers
-# 5. Save as hand_landmarks.json
+# 1. Start application
+python main.py
+
+# 2. Click "Load Image" and select an image with AprilTag
+# 3. Scale calibration happens automatically
+# 4. Select "Thumb" from dropdown
+# 5. Click 4 times on the image to mark thumb joints
+# 6. Repeat for Index, Middle, Ring, Pinky fingers
+# 7. Click "📄 Generate Report (PDF)"
+# 8. PDF saved to ~/Documents/HandMetrics/reports/
 ```
 
-### Example 3: View Saved Landmarks
+### Example 3: Using Real-Time Measurements
 
 ```bash
-python view_landmarks.py hand_landmarks.json
-# Displays image with landmarks overlaid
-# Prints all coordinates to console
-```
-
-### Example 4: Convert to MediaPipe Format
-
-```bash
-python convert_landmarks.py hand_landmarks.json hand_landmarks_mediapipe.json
-# Output: MediaPipe-compatible format
+# During annotation:
+# 1. Check "Show Measurements" to see cm distances
+# 2. Right panel displays all measurements
+# 3. Distances update in real-time as you annotate
 ```
 
 ---
 
 ## 📝 Output Files
 
-### From Auto-Detection
-- `plots/detected_*.png` - High-quality visualization plots
+### PDF Reports
+- **Location:** `~/Documents/HandMetrics/reports/`
+- **Format:** `HandMetrics_[image_name]_[timestamp].pdf`
+- **Contents:**
+  - Annotated image with landmarks and measurements
+  - Joint distance measurements table (cm and pixels)
+  - Scale calibration information
+  - Image metadata and timestamp
+  - Professional A4 single-page format
 
-### From Manual Annotation
-- `hand_landmarks.json` - Coordinates and AprilTag info
-
-### From Format Conversion
-- `hand_landmarks_mediapipe.json` - MediaPipe format (21 landmarks)
+### Example Report Filename
+```
+HandMetrics_hand_photo_20250112_143025.pdf
+```
 
 ---
 
-## ✅ Checklist: When to Use Each Tool
+## ✅ Getting Started Checklist
 
-### Use Auto-Detection When:
-- ✅ Quick results needed
-- ✅ Hand is in clear, well-lit conditions
-- ✅ Standard hand positions
-- ✅ Batch processing multiple images
-- ✅ Testing/validation phase
+Before using HandMetrics:
 
-### Use Manual Annotation When:
-- ✅ High accuracy required
-- ✅ Hand in complex poses
-- ✅ Difficult lighting conditions
-- ✅ Specific landmark precision needed
-- ✅ Dataset creation/labeling
-- ✅ Validation of auto-detection
+- ✅ Python 3.13+ installed
+- ✅ All dependencies installed (`pip install -r requirements.txt`)
+- ✅ Image with AprilTag (7×7 cm) prepared
+- ✅ AprilTag clearly visible in image
+- ✅ Good lighting for accurate detection
+- ✅ Adequate disk space for PDF reports (~100KB per report)
+
+### For Best Results:
+
+- ✅ Use high-resolution images (1920×1080 or higher)
+- ✅ Ensure AprilTag is perpendicular to camera
+- ✅ Place AprilTag and hand in same view
+- ✅ Annotate all 5 fingers for complete data
+- ✅ Use consistent lighting for similar hand poses
+- ✅ Keep hand still while annotating
 
 ---
 
 ## 🐛 Troubleshooting
 
-### GUI Won't Launch
+### Application Won't Start
 ```bash
-pip install --upgrade PySide6
-python hand_annotation_gui.py
+# Ensure all dependencies installed
+pip install -r requirements.txt --upgrade
+
+# Run with Python 3.13+
+python --version  # Check version
+python main.py
 ```
 
-### Import Errors
+### GUI Won't Launch / Import Errors
 ```bash
-# Check all dependencies installed
-pip install -r requirements.txt --upgrade
+# Reinstall PySide6
+pip install --upgrade PySide6
+
+# Verify all imports work
+python -c "import cv2, PySide6, reportlab; print('OK')"
 ```
 
 ### Image Won't Load
-- Ensure image is in `images/` folder
-- Check supported formats (.jpg, .png, .bmp)
-- Verify file permissions
+- Ensure image is in `images/` folder or use file browser
+- Check supported formats (.jpg, .jpeg, .png, .bmp)
+- Verify file permissions (readable)
+- Image should be at least 640×480
 
 ### AprilTag Not Detected
-- Ensure tag is clearly visible
-- Good lighting is important
-- Tag should be roughly square to camera
-- Minimum size: 50x50 pixels recommended
+- Ensure AprilTag is clearly visible in image
+- Good lighting is essential
+- Tag should be roughly square/perpendicular to camera
+- Minimum size: 50×50 pixels recommended
+- Check that image contains a valid AprilTag (tag36h11)
 
-### Save Fails
-- Check write permissions in directory
+### Scale Calibration Shows "No Scale"
+- AprilTag must be detected first
+- Load an image that contains the AprilTag
+- Check AprilTag quality and visibility
+
+### PDF Report Generation Fails
+- Check that Documents/HandMetrics/reports folder exists (auto-created)
 - Ensure sufficient disk space
-- Try saving to different location
+- Verify at least one landmark point is added
+- Check that AprilTag is detected (required for measurements)
+
+### Permission Denied Errors on macOS
+```bash
+# Grant execute permission if needed
+chmod +x main.py
+python main.py
+```
 
 ---
 
 ## 📚 Additional Resources
 
-For detailed GUI documentation, see [README_GUI.md](README_GUI.md)
+- **CLAUDE.md** - Development guide for contributors
+- **GitHub CI/CD** - Automated testing on Windows and macOS
+- **Release Workflow** - Automatic release creation on version tags
+
+## 🔄 CI/CD Workflow
+
+This project includes GitHub Actions workflows:
+
+### CI Workflow (`.github/workflows/ci.yml`)
+- Runs on every push and pull request to `main`
+- Tests on Windows and macOS with Python 3.13
+- Verifies dependencies and syntax
+
+### Release Workflow (`.github/workflows/release.yml`)
+- Triggers on version tags (`v*`)
+- Creates GitHub releases automatically
+- Includes release notes
 
 ---
 
@@ -396,13 +435,49 @@ This project uses:
 
 ## 💡 Pro Tips
 
-1. **For Accuracy**: Use manual annotation for important datasets
-2. **For Speed**: Use auto-detection for quick previews
-3. **For Validation**: Use auto-detection followed by manual verification
-4. **For Consistency**: Use the same finger order for all images
-5. **For Quality**: Ensure consistent lighting and image quality
+1. **Consistent Lighting**: Use even lighting to avoid shadows on hand
+2. **AprilTag Placement**: Position AprilTag near hand but not covering it
+3. **Perpendicular View**: Keep camera perpendicular to hand for accurate measurements
+4. **High Resolution**: Use images with good resolution for precise landmarks
+5. **PDF Organization**: Reports auto-saved - check Documents/HandMetrics/reports regularly
+6. **Batch Processing**: Annotate multiple hands using separate annotation sessions
+
+## 📊 Measurement Accuracy
+
+- **Typical Accuracy**: ±0.2-0.3 cm
+- **Depends on**:
+  - AprilTag detection quality
+  - Image resolution
+  - Landmark precision
+  - Lighting conditions
 
 ---
 
-**Version**: 2.0 (GUI Added)
+## 🤝 Contributing
+
+To contribute improvements or report issues:
+
+1. Check CLAUDE.md for development guidelines
+2. Fork the repository
+3. Create a feature branch
+4. Test on both Windows and macOS
+5. Submit a pull request
+
+The CI/CD pipeline will automatically test your changes.
+
+---
+
+## 📄 License
+
+This project uses:
+- **PySide6** (LGPL License)
+- **OpenCV** (Apache 2.0)
+- **ReportLab** (Apache 2.0)
+- **Pillow** (HPND License)
+- **NumPy** (BSD License)
+
+---
+
+**Version**: 3.0 (PDF Reports & Measurements)
 **Last Updated**: 2025-11-12
+**Status**: Active Development ✨

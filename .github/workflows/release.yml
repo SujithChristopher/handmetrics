@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+        python-version: ['3.13']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Verify code integrity
+      run: |
+        python -m py_compile main.py
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: HandMetrics ${{ github.ref_name }}
+        body: |
+          # HandMetrics Release ${{ github.ref_name }}
+
+          ## Changes
+          See commit history for detailed changes.
+
+          ## Installation
+          ```bash
+          # Clone the repository
+          git clone <repository-url>
+          cd handmetrics
+
+          # Install dependencies (Python 3.13+)
+          pip install -r requirements.txt
+
+          # Run the application
+          python main.py
+          ```
+
+          ## System Requirements
+          - Python 3.13+
+          - Windows 10/11 or macOS
+          - 4GB RAM minimum
+          - Camera or image files for hand annotation
+
+          ## Features
+          - Real-time hand joint annotation
+          - AprilTag calibration for accurate measurements
+          - Professional PDF report generation
+          - Single-page A4 format reports
+
+          ## Documentation
+          See [README.md](https://github.com/your-org/handmetrics/blob/main/README.md) for complete documentation.
+        draft: false
+        prerelease: false

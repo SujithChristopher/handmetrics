@@ -81,7 +81,7 @@ class ReportGenerator:
     """Generate comprehensive PDF reports with measurements."""
 
     def __init__(self):
-        self.reports_dir = Path.home() / "Documents" / "HandMetrics"
+        self.reports_dir = Path.home() / "Documents" / "HandMetrics" / "reports"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
     def generate_report(self, image_path: str, annotated_image: np.ndarray, measurements: Dict, scale_info: Dict) -> str:
@@ -576,14 +576,14 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
-        # Left panel - Controls
-        left_panel = self.create_left_panel()
-
-        # Center - Image canvas
+        # Center - Image canvas (must be created before left panel)
         self.canvas = ImageCanvas()
         self.canvas.point_added.connect(self.on_point_added)
         self.canvas.apriltag_detected.connect(self.on_apriltag_detected)
         self.canvas.scale_calibrated.connect(self.on_scale_calibrated)
+
+        # Left panel - Controls
+        left_panel = self.create_left_panel()
 
         # Right panel - Landmarks and Measurements display
         right_panel = self.create_right_panel()
@@ -608,6 +608,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         layout.addWidget(QLabel("Select Finger:"))
         self.finger_combo = QComboBox()
         self.finger_combo.addItems(["Thumb", "Index", "Middle", "Ring", "Pinky"])
+        self.finger_combo.setCurrentIndex(-1)  # Start with no selection
         self.finger_combo.currentTextChanged.connect(self.on_finger_selected)
         layout.addWidget(self.finger_combo)
 
@@ -661,12 +662,6 @@ class HandAnnotationWithMeasurements(QMainWindow):
         layout.addWidget(clear_all_btn)
 
         layout.addSpacing(20)
-
-        # Save annotations
-        save_btn = QPushButton("Save Landmarks")
-        save_btn.setStyleSheet("background-color: #00cc00; color: white; font-weight: bold;")
-        save_btn.clicked.connect(self.save_landmarks)
-        layout.addWidget(save_btn)
 
         # Generate PDF Report
         report_btn = QPushButton("📄 Generate Report (PDF)")
@@ -755,6 +750,10 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
     def on_finger_selected(self, finger_text: str):
         """Handle finger selection."""
+        # Ignore empty selection
+        if not finger_text:
+            return
+
         finger_map = {
             "Thumb": "thumb",
             "Index": "index",
@@ -762,9 +761,10 @@ class HandAnnotationWithMeasurements(QMainWindow):
             "Ring": "ring",
             "Pinky": "pinky"
         }
-        finger = finger_map[finger_text]
-        self.canvas.set_current_finger(finger)
-        self.update_point_counter()
+        finger = finger_map.get(finger_text)
+        if finger:
+            self.canvas.set_current_finger(finger)
+            self.update_point_counter()
 
     def on_point_added(self, data):
         """Handle point added event."""

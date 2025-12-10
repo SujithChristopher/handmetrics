@@ -381,27 +381,30 @@ class ImageCanvas(QFrame):
         self.update()
 
     def calculate_joint_distances(self) -> Dict[str, List[Dict]]:
-        """Calculate distances between consecutive points for each crease."""
+        """Calculate distances only for pairs (p0-p1, p2-p3, p4-p5, etc.).
+        Skips gaps between segments (p1-p2, p3-p4, etc.)."""
         distances = {}
 
         for crease, points in self.selected_points.items():
             crease_distances = []
 
             if len(points) >= 2:
-                for i in range(len(points) - 1):
-                    p1 = np.array(points[i])
-                    p2 = np.array(points[i + 1])
+                # Only measure pairs: (0,1), (2,3), (4,5), etc.
+                for i in range(0, len(points) - 1, 2):
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        p1 = np.array(points[i])
+                        p2 = np.array(points[i + 1])
 
-                    pixel_dist = np.linalg.norm(p2 - p1)
-                    cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        pixel_dist = float(np.linalg.norm(p2 - p1))
+                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                    distance_info = {
-                        'from_point': i,
-                        'to_point': i + 1,
-                        'pixel_distance': round(pixel_dist, 2),
-                        'cm_distance': round(cm_dist, 2)
-                    }
-                    crease_distances.append(distance_info)
+                        distance_info = {
+                            'from_point': i,
+                            'to_point': i + 1,
+                            'pixel_distance': round(pixel_dist, 2),
+                            'cm_distance': round(cm_dist, 2)
+                        }
+                        crease_distances.append(distance_info)
 
             distances[crease] = crease_distances
 
@@ -440,25 +443,27 @@ class ImageCanvas(QFrame):
                 cv2.putText(display_image, f"{idx}", (x + 10, y - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # Draw skeleton connections if enough points
+            # Draw skeleton connections only for pairs (p0-p1, p2-p3, p4-p5, etc.)
+            # Skip gaps between pairs (p1-p2, p3-p4, etc.)
             if len(points) > 1:
-                for i in range(len(points) - 1):
-                    cv2.line(display_image, points[i], points[i+1], color, 2)
+                for i in range(0, len(points) - 1, 2):  # Only even indices (0, 2, 4, ...)
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        cv2.line(display_image, points[i], points[i+1], color, 2)
 
-                    # Draw distance text if showing measurements
-                    if self.show_measurements and self.measurement_calc.scale_calibrated:
-                        p1 = np.array(points[i])
-                        p2 = np.array(points[i+1])
-                        pixel_dist = np.linalg.norm(p2 - p1)
-                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        # Draw distance text if showing measurements
+                        if self.show_measurements and self.measurement_calc.scale_calibrated:
+                            p1 = np.array(points[i])
+                            p2 = np.array(points[i+1])
+                            pixel_dist = float(np.linalg.norm(p2 - p1))
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                        # Midpoint for text
-                        mid_x = int((points[i][0] + points[i+1][0]) / 2)
-                        mid_y = int((points[i][1] + points[i+1][1]) / 2)
+                            # Midpoint for text
+                            mid_x = int((points[i][0] + points[i+1][0]) / 2)
+                            mid_y = int((points[i][1] + points[i+1][1]) / 2)
 
-                        text = f"{cm_dist:.1f}cm"
-                        cv2.putText(display_image, text, (mid_x, mid_y - 5),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            text = f"{cm_dist:.1f}cm"
+                            cv2.putText(display_image, text, (mid_x, mid_y - 5),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         # Convert to QPixmap
         rgb_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
@@ -529,25 +534,27 @@ class ImageCanvas(QFrame):
                 cv2.putText(display_image, f"{idx}", (x + 10, y - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # Draw skeleton connections if enough points
+            # Draw skeleton connections only for pairs (p0-p1, p2-p3, p4-p5, etc.)
+            # Skip gaps between pairs (p1-p2, p3-p4, etc.)
             if len(points) > 1:
-                for i in range(len(points) - 1):
-                    cv2.line(display_image, points[i], points[i+1], color, 2)
+                for i in range(0, len(points) - 1, 2):  # Only even indices (0, 2, 4, ...)
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        cv2.line(display_image, points[i], points[i+1], color, 2)
 
-                    # Draw distance text if showing measurements
-                    if self.show_measurements and self.measurement_calc.scale_calibrated:
-                        p1 = np.array(points[i])
-                        p2 = np.array(points[i+1])
-                        pixel_dist = float(np.linalg.norm(p2 - p1))
-                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        # Draw distance text if showing measurements
+                        if self.show_measurements and self.measurement_calc.scale_calibrated:
+                            p1 = np.array(points[i])
+                            p2 = np.array(points[i+1])
+                            pixel_dist = float(np.linalg.norm(p2 - p1))
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                        # Midpoint for text
-                        mid_x = int((points[i][0] + points[i+1][0]) / 2)
-                        mid_y = int((points[i][1] + points[i+1][1]) / 2)
+                            # Midpoint for text
+                            mid_x = int((points[i][0] + points[i+1][0]) / 2)
+                            mid_y = int((points[i][1] + points[i+1][1]) / 2)
 
-                        text = f"{cm_dist:.1f}cm"
-                        cv2.putText(display_image, text, (mid_x, mid_y - 5),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            text = f"{cm_dist:.1f}cm"
+                            cv2.putText(display_image, text, (mid_x, mid_y - 5),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         return display_image
 

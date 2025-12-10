@@ -586,6 +586,22 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.canvas.apriltag_detected.connect(self.on_apriltag_detected)
         self.canvas.scale_calibrated.connect(self.on_scale_calibrated)
 
+        # Center - Geometric plot canvas
+        self.figure = Figure(figsize=(10, 10))
+        self.plot_canvas = FigureCanvas(self.figure)
+        self.plot_canvas.setStyleSheet("background-color: #1a1a1a; border: 2px solid #333;")
+
+        # Create container for center area (to switch between image and plot)
+        self.center_container = QWidget()
+        center_layout = QVBoxLayout(self.center_container)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.addWidget(self.canvas)
+        center_layout.addWidget(self.plot_canvas)
+
+        # Initially show canvas, hide plot
+        self.plot_canvas.hide()
+        self.view_mode = "image"  # "image" or "plot"
+
         # Left panel - Controls
         left_panel = self.create_left_panel()
 
@@ -593,7 +609,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         right_panel = self.create_right_panel()
 
         main_layout.addWidget(left_panel, 1)
-        main_layout.addWidget(self.canvas, 3)
+        main_layout.addWidget(self.center_container, 3)
         main_layout.addWidget(right_panel, 1)
 
         self.show()
@@ -610,6 +626,15 @@ class HandAnnotationWithMeasurements(QMainWindow):
         load_btn.setMinimumHeight(40)
         load_btn.clicked.connect(self.load_image)
         layout.addWidget(load_btn)
+
+        # View Mode Toggle
+        self.view_toggle_btn = QPushButton("📊 Switch to Plot View")
+        self.view_toggle_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+        self.view_toggle_btn.setMinimumHeight(40)
+        self.view_toggle_btn.clicked.connect(self.toggle_view_mode)
+        layout.addWidget(self.view_toggle_btn)
+
+        layout.addSpacing(10)
 
         # Crease Selection
         crease_label = QLabel("Select Crease:")
@@ -760,32 +785,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
         scroll2.setWidget(self.measurements_widget)
         measurements_layout.addWidget(scroll2, 1)  # Give scroll area maximum stretch
 
-        # Tab 3: Geometric Plot
-        plot_tab = QWidget()
-        plot_layout = QVBoxLayout(plot_tab)
-        plot_layout.setContentsMargins(8, 8, 8, 8)
-        plot_layout.setSpacing(8)
-
-        plot_header = QLabel("📊 Segment Geometry (First 3 Segments)")
-        plot_header.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490;")
-        plot_layout.addWidget(plot_header)
-
-        # Create matplotlib canvas
-        self.figure = Figure(figsize=(6, 6))
-        self.plot_canvas = FigureCanvas(self.figure)
-        self.plot_canvas.setStyleSheet("background-color: white; border: 1px solid #ddd; border-radius: 3px;")
-        plot_layout.addWidget(self.plot_canvas, 1)
-
-        # Add refresh button
-        refresh_plot_btn = QPushButton("🔄 Refresh Plot")
-        refresh_plot_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; font-size: 10px; padding: 8px; border-radius: 3px;")
-        refresh_plot_btn.clicked.connect(self.update_geometric_plot)
-        plot_layout.addWidget(refresh_plot_btn)
-
         # Add tabs with improved styling
         self.tab_widget.addTab(landmarks_tab, "📍 Landmarks")
         self.tab_widget.addTab(measurements_tab, "📐 Measurements")
-        self.tab_widget.addTab(plot_tab, "📊 Geometry")
 
         layout.addWidget(self.tab_widget, 1)  # Give tab widget maximum stretch
         group.setLayout(layout)
@@ -971,25 +973,75 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
         self.measurements_layout.addStretch()
 
+    def toggle_view_mode(self):
+        """Toggle between image view and plot view."""
+        if self.view_mode == "image":
+            # Switch to plot view
+            self.canvas.hide()
+            self.plot_canvas.show()
+            self.view_mode = "plot"
+            self.view_toggle_btn.setText("🖼️ Switch to Image View")
+            self.view_toggle_btn.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+            # Update plot when switching to it
+            self.update_geometric_plot()
+        else:
+            # Switch to image view
+            self.plot_canvas.hide()
+            self.canvas.show()
+            self.view_mode = "image"
+            self.view_toggle_btn.setText("📊 Switch to Plot View")
+            self.view_toggle_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+
     def update_geometric_plot(self):
-        """Update geometric plot showing segment centers and connections."""
+        """Update geometric plot showing segment centers and connections in CAD style with cm units."""
         self.figure.clear()
+
+        # Set dark background for CAD style
+        self.figure.patch.set_facecolor('#1a1a1a')
         ax = self.figure.add_subplot(111)
+        ax.set_facecolor('#0a0a0a')
 
         landmarks = self.canvas.get_landmarks()
         crease1_points = landmarks.get('crease1', [])
         crease2_points = landmarks.get('crease2', [])
 
-        # We need at least 6 points (3 segments) from each crease
-        if len(crease1_points) < 6 or len(crease2_points) < 6:
-            ax.text(0.5, 0.5, 'Need at least 6 points in\nCrease 1 and Crease 2\n(3 segments each)',
-                   ha='center', va='center', fontsize=12, color='gray',
-                   transform=ax.transAxes)
+        # Check if calibration is available
+        if not self.canvas.measurement_calc.scale_calibrated:
+            ax.text(0.5, 0.5, 'Please load an image with\nAprilTag for calibration',
+                   ha='center', va='center', fontsize=14, color='#00ff00',
+                   transform=ax.transAxes, weight='bold')
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
             ax.axis('off')
             self.plot_canvas.draw()
             return
+
+        # We need at least 6 points (3 segments) from each crease
+        if len(crease1_points) < 6 or len(crease2_points) < 6:
+            ax.text(0.5, 0.5, 'Need at least 6 points in\nCrease 1 and Crease 2\n(3 segments each)',
+                   ha='center', va='center', fontsize=14, color='#00ff00',
+                   transform=ax.transAxes, weight='bold')
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            self.plot_canvas.draw()
+            return
+
+        # Get pixels per cm for conversion
+        pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+
+        # Convert pixel coordinates to cm
+        def pixels_to_cm(points):
+            """Convert list of pixel coordinates to cm."""
+            cm_points = []
+            for x, y in points:
+                cm_x = x / pixels_per_cm
+                cm_y = y / pixels_per_cm
+                cm_points.append((cm_x, cm_y))
+            return cm_points
+
+        crease1_cm = pixels_to_cm(crease1_points)
+        crease2_cm = pixels_to_cm(crease2_points)
 
         # Extract first 3 segments (index, middle, ring fingers)
         # seg1: p0-p1, seg2: p2-p3, seg3: p4-p5
@@ -1006,47 +1058,100 @@ class HandAnnotationWithMeasurements(QMainWindow):
                     centers.append(center)
             return segments, centers
 
-        crease1_segs, crease1_centers = get_segments(crease1_points)
-        crease2_segs, crease2_centers = get_segments(crease2_points)
+        crease1_segs, crease1_centers = get_segments(crease1_cm)
+        crease2_segs, crease2_centers = get_segments(crease2_cm)
 
-        # Plot crease 1 segments and centers
+        # Plot crease 1 segments and centers (Cyan - CAD style)
         for i, (p0, p1) in enumerate(crease1_segs):
-            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], 'b-', linewidth=3, alpha=0.6, label=f'C1 Seg{i+1}' if i == 0 else '')
-            ax.plot(p0[0], p0[1], 'bo', markersize=6)
-            ax.plot(p1[0], p1[1], 'bo', markersize=6)
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#00ffff', linewidth=3, alpha=0.8, label=f'C1 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'o', color='#00ffff', markersize=8)
+            ax.plot(p1[0], p1[1], 'o', color='#00ffff', markersize=8)
 
         # Plot crease 1 center connections
         if len(crease1_centers) >= 2:
             centers_array = np.array(crease1_centers)
-            ax.plot(centers_array[:, 0], centers_array[:, 1], 'b--', linewidth=2, alpha=0.8, label='C1 Centers')
+            ax.plot(centers_array[:, 0], centers_array[:, 1], '--', color='#00ffff', linewidth=2, alpha=0.6, label='C1 Centers')
             for center in crease1_centers:
-                ax.plot(center[0], center[1], 'bs', markersize=8)
+                ax.plot(center[0], center[1], 's', color='#00ffff', markersize=10)
 
-        # Plot crease 2 segments and centers
+        # Plot crease 2 segments and centers (Yellow - CAD style)
         for i, (p0, p1) in enumerate(crease2_segs):
-            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], 'g-', linewidth=3, alpha=0.6, label=f'C2 Seg{i+1}' if i == 0 else '')
-            ax.plot(p0[0], p0[1], 'go', markersize=6)
-            ax.plot(p1[0], p1[1], 'go', markersize=6)
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#ffff00', linewidth=3, alpha=0.8, label=f'C2 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'o', color='#ffff00', markersize=8)
+            ax.plot(p1[0], p1[1], 'o', color='#ffff00', markersize=8)
 
         # Plot crease 2 center connections
         if len(crease2_centers) >= 2:
             centers_array = np.array(crease2_centers)
-            ax.plot(centers_array[:, 0], centers_array[:, 1], 'g--', linewidth=2, alpha=0.8, label='C2 Centers')
+            ax.plot(centers_array[:, 0], centers_array[:, 1], '--', color='#ffff00', linewidth=2, alpha=0.6, label='C2 Centers')
             for center in crease2_centers:
-                ax.plot(center[0], center[1], 'gs', markersize=8)
+                ax.plot(center[0], center[1], 's', color='#ffff00', markersize=10)
 
-        # Add labels
+        # Add segment labels
         segment_labels = ['Index', 'Middle', 'Ring']
         for i, center in enumerate(crease1_centers):
             if i < len(segment_labels):
-                ax.text(center[0], center[1] - 20, segment_labels[i],
-                       ha='center', fontsize=9, color='blue', fontweight='bold')
+                ax.text(center[0], center[1] - 0.3, segment_labels[i],
+                       ha='center', fontsize=11, color='#00ffff', weight='bold')
 
-        ax.set_xlabel('X (pixels)', fontsize=10)
-        ax.set_ylabel('Y (pixels)', fontsize=10)
-        ax.set_title('Crease Segment Geometry\n(Blue: Crease 1, Green: Crease 2)', fontsize=11, fontweight='bold')
-        ax.legend(loc='upper right', fontsize=8)
-        ax.grid(True, alpha=0.3)
+        # Add dimension annotations for Crease 1 (along crease)
+        for i in range(len(crease1_centers) - 1):
+            c1 = crease1_centers[i]
+            c2 = crease1_centers[i + 1]
+            dist = float(np.linalg.norm(c2 - c1))
+            mid = (c1 + c2) / 2
+            ax.text(mid[0], mid[1] + 0.3, f'C1: {dist:.2f} cm',
+                   ha='center', fontsize=9, color='#00ffff', weight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#00ffff', linewidth=1))
+
+        # Add dimension annotations for Crease 2 (along crease)
+        for i in range(len(crease2_centers) - 1):
+            c1 = crease2_centers[i]
+            c2 = crease2_centers[i + 1]
+            dist = float(np.linalg.norm(c2 - c1))
+            mid = (c1 + c2) / 2
+            ax.text(mid[0], mid[1] - 0.3, f'C2: {dist:.2f} cm',
+                   ha='center', fontsize=9, color='#ffff00', weight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ffff00', linewidth=1))
+
+        # Add cross-crease connections (c1:seg1 to c2:seg1, etc.)
+        if len(crease1_centers) == 3 and len(crease2_centers) == 3:
+            for i in range(3):  # seg1, seg2, seg3
+                c1_center = crease1_centers[i]
+                c2_center = crease2_centers[i]
+
+                # Draw connection line (magenta/pink for cross-crease)
+                ax.plot([c1_center[0], c2_center[0]], [c1_center[1], c2_center[1]],
+                       color='#ff00ff', linewidth=2, alpha=0.6, linestyle=':')
+
+                # Calculate and display distance
+                dist = float(np.linalg.norm(c2_center - c1_center))
+                mid = (c1_center + c2_center) / 2
+
+                # Offset text based on segment to avoid overlap
+                offset_x = 0.5 if i == 1 else -0.5 if i == 0 else 0.5
+                ax.text(mid[0] + offset_x, mid[1], f'{dist:.2f} cm',
+                       ha='center', fontsize=9, color='#ff00ff', weight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ff00ff', linewidth=1))
+
+        ax.set_xlabel('X (cm)', fontsize=12, color='#00ff00', weight='bold')
+        ax.set_ylabel('Y (cm)', fontsize=12, color='#00ff00', weight='bold')
+        ax.set_title('CAD-Style Crease Segment Geometry\n(Cyan: Crease 1, Yellow: Crease 2)',
+                    fontsize=13, color='#00ff00', weight='bold', pad=20)
+
+        # CAD-style legend
+        legend = ax.legend(loc='upper right', fontsize=10, facecolor='#1a1a1a',
+                          edgecolor='#00ff00', framealpha=0.9)
+        for text in legend.get_texts():
+            text.set_color('#00ff00')
+
+        # CAD-style grid
+        ax.grid(True, alpha=0.3, color='#00ff00', linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#00ff00', which='both')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#00ff00')
+            spine.set_linewidth(2)
+
         ax.invert_yaxis()  # Invert Y axis to match image coordinates
         ax.set_aspect('equal', adjustable='box')
 

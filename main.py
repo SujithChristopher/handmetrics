@@ -21,6 +21,11 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from PIL import Image as PILImage
 
+import matplotlib
+matplotlib.use('QtAgg')
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 
 class MeasurementCalculator:
     """Calculate measurements using AprilTag as reference."""
@@ -755,9 +760,32 @@ class HandAnnotationWithMeasurements(QMainWindow):
         scroll2.setWidget(self.measurements_widget)
         measurements_layout.addWidget(scroll2, 1)  # Give scroll area maximum stretch
 
+        # Tab 3: Geometric Plot
+        plot_tab = QWidget()
+        plot_layout = QVBoxLayout(plot_tab)
+        plot_layout.setContentsMargins(8, 8, 8, 8)
+        plot_layout.setSpacing(8)
+
+        plot_header = QLabel("📊 Segment Geometry (First 3 Segments)")
+        plot_header.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490;")
+        plot_layout.addWidget(plot_header)
+
+        # Create matplotlib canvas
+        self.figure = Figure(figsize=(6, 6))
+        self.plot_canvas = FigureCanvas(self.figure)
+        self.plot_canvas.setStyleSheet("background-color: white; border: 1px solid #ddd; border-radius: 3px;")
+        plot_layout.addWidget(self.plot_canvas, 1)
+
+        # Add refresh button
+        refresh_plot_btn = QPushButton("🔄 Refresh Plot")
+        refresh_plot_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; font-size: 10px; padding: 8px; border-radius: 3px;")
+        refresh_plot_btn.clicked.connect(self.update_geometric_plot)
+        plot_layout.addWidget(refresh_plot_btn)
+
         # Add tabs with improved styling
         self.tab_widget.addTab(landmarks_tab, "📍 Landmarks")
         self.tab_widget.addTab(measurements_tab, "📐 Measurements")
+        self.tab_widget.addTab(plot_tab, "📊 Geometry")
 
         layout.addWidget(self.tab_widget, 1)  # Give tab widget maximum stretch
         group.setLayout(layout)
@@ -942,6 +970,88 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.measurements_layout.addWidget(empty_label)
 
         self.measurements_layout.addStretch()
+
+    def update_geometric_plot(self):
+        """Update geometric plot showing segment centers and connections."""
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+
+        landmarks = self.canvas.get_landmarks()
+        crease1_points = landmarks.get('crease1', [])
+        crease2_points = landmarks.get('crease2', [])
+
+        # We need at least 6 points (3 segments) from each crease
+        if len(crease1_points) < 6 or len(crease2_points) < 6:
+            ax.text(0.5, 0.5, 'Need at least 6 points in\nCrease 1 and Crease 2\n(3 segments each)',
+                   ha='center', va='center', fontsize=12, color='gray',
+                   transform=ax.transAxes)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            self.plot_canvas.draw()
+            return
+
+        # Extract first 3 segments (index, middle, ring fingers)
+        # seg1: p0-p1, seg2: p2-p3, seg3: p4-p5
+        def get_segments(points):
+            """Extract first 3 segments and their centers."""
+            segments = []
+            centers = []
+            for i in range(0, 6, 2):  # 0, 2, 4
+                if i + 1 < len(points):
+                    p0 = np.array(points[i])
+                    p1 = np.array(points[i + 1])
+                    center = (p0 + p1) / 2.0
+                    segments.append((p0, p1))
+                    centers.append(center)
+            return segments, centers
+
+        crease1_segs, crease1_centers = get_segments(crease1_points)
+        crease2_segs, crease2_centers = get_segments(crease2_points)
+
+        # Plot crease 1 segments and centers
+        for i, (p0, p1) in enumerate(crease1_segs):
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], 'b-', linewidth=3, alpha=0.6, label=f'C1 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'bo', markersize=6)
+            ax.plot(p1[0], p1[1], 'bo', markersize=6)
+
+        # Plot crease 1 center connections
+        if len(crease1_centers) >= 2:
+            centers_array = np.array(crease1_centers)
+            ax.plot(centers_array[:, 0], centers_array[:, 1], 'b--', linewidth=2, alpha=0.8, label='C1 Centers')
+            for center in crease1_centers:
+                ax.plot(center[0], center[1], 'bs', markersize=8)
+
+        # Plot crease 2 segments and centers
+        for i, (p0, p1) in enumerate(crease2_segs):
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], 'g-', linewidth=3, alpha=0.6, label=f'C2 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'go', markersize=6)
+            ax.plot(p1[0], p1[1], 'go', markersize=6)
+
+        # Plot crease 2 center connections
+        if len(crease2_centers) >= 2:
+            centers_array = np.array(crease2_centers)
+            ax.plot(centers_array[:, 0], centers_array[:, 1], 'g--', linewidth=2, alpha=0.8, label='C2 Centers')
+            for center in crease2_centers:
+                ax.plot(center[0], center[1], 'gs', markersize=8)
+
+        # Add labels
+        segment_labels = ['Index', 'Middle', 'Ring']
+        for i, center in enumerate(crease1_centers):
+            if i < len(segment_labels):
+                ax.text(center[0], center[1] - 20, segment_labels[i],
+                       ha='center', fontsize=9, color='blue', fontweight='bold')
+
+        ax.set_xlabel('X (pixels)', fontsize=10)
+        ax.set_ylabel('Y (pixels)', fontsize=10)
+        ax.set_title('Crease Segment Geometry\n(Blue: Crease 1, Green: Crease 2)', fontsize=11, fontweight='bold')
+        ax.legend(loc='upper right', fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.invert_yaxis()  # Invert Y axis to match image coordinates
+        ax.set_aspect('equal', adjustable='box')
+
+        self.figure.tight_layout()
+        self.plot_canvas.draw()
 
     def undo_point(self):
         """Undo last point."""

@@ -1,5 +1,6 @@
 import sys
 import json
+import csv
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
@@ -714,6 +715,13 @@ class HandAnnotationWithMeasurements(QMainWindow):
         save_btn.clicked.connect(self.save_landmarks)
         layout.addWidget(save_btn)
 
+        # Save Analysis CSV
+        save_csv_btn = QPushButton("💾 Save Analysis (CSV)")
+        save_csv_btn.setStyleSheet("background-color: #009900; color: white; font-weight: bold; font-size: 11px; padding: 10px; border-radius: 5px;")
+        save_csv_btn.setMinimumHeight(44)
+        save_csv_btn.clicked.connect(self.save_analysis_csv)
+        layout.addWidget(save_csv_btn)
+
         # Generate PDF Report
         report_btn = QPushButton("📄 Generate Report (PDF)")
         report_btn.setStyleSheet("background-color: #0066cc; color: white; font-weight: bold; font-size: 11px; padding: 10px; border-radius: 5px;")
@@ -1116,6 +1124,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
         # Add cross-crease connections (c1:seg1 to c2:seg1, etc.)
         if len(crease1_centers) == 3 and len(crease2_centers) == 3:
+            vertical_mids = []
+            vertical_vectors = []
+
             for i in range(3):  # seg1, seg2, seg3
                 c1_center = crease1_centers[i]
                 c2_center = crease2_centers[i]
@@ -1127,12 +1138,54 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 # Calculate and display distance
                 dist = float(np.linalg.norm(c2_center - c1_center))
                 mid = (c1_center + c2_center) / 2
+                vertical_mids.append(mid)
+                vertical_vectors.append(c2_center - c1_center)
 
                 # Offset text based on segment to avoid overlap
                 offset_x = 0.5 if i == 1 else -0.5 if i == 0 else 0.5
                 ax.text(mid[0] + offset_x, mid[1], f'{dist:.2f} cm',
                        ha='center', fontsize=9, color='#ff00ff', weight='bold',
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ff00ff', linewidth=1))
+
+            # --- Angle Calculation & Visualization ---
+            vertical_mids = np.array(vertical_mids)
+
+            # Draw Reference Lines (connecting vertical midpoints)
+            # Line 1-2 (Index Mid -> Middle Mid)
+            ax.plot([vertical_mids[0][0], vertical_mids[1][0]], 
+                    [vertical_mids[0][1], vertical_mids[1][1]], 
+                    color='white', linestyle='-.', linewidth=1.5, alpha=0.7, label='Ref Line 1-2')
+            
+            # Line 2-3 (Middle Mid -> Ring Mid)
+            ax.plot([vertical_mids[1][0], vertical_mids[2][0]], 
+                    [vertical_mids[1][1], vertical_mids[2][1]], 
+                    color='white', linestyle='-.', linewidth=1.5, alpha=0.7, label='Ref Line 2-3')
+
+            # Calculate Angles
+            def get_angle(v1, v2):
+                u1 = v1 / np.linalg.norm(v1)
+                u2 = v2 / np.linalg.norm(v2)
+                return np.degrees(np.arccos(np.clip(np.dot(u1, u2), -1.0, 1.0)))
+
+            ref_12 = vertical_mids[1] - vertical_mids[0]
+            ref_23 = vertical_mids[2] - vertical_mids[1]
+
+            ang1 = get_angle(vertical_vectors[0], ref_12)
+            ang2 = 180 - get_angle(vertical_vectors[1], ref_12) 
+            ang3 = get_angle(vertical_vectors[1], ref_23)
+            ang4 = 180 - get_angle(vertical_vectors[2], ref_23) 
+
+            # Display Angles in a box on the plot
+            angle_text = (
+                f"ANGLES:\n"
+                f"Ang1 (V1/Ref1-2): {ang1:.1f}°\n"
+                f"Ang2 (V2/Ref1-2): {ang2:.1f}°\n"
+                f"Ang3 (V2/Ref2-3): {ang3:.1f}°\n"
+                f"Ang4 (V3/Ref2-3): {ang4:.1f}°"
+            )
+            ax.text(0.02, 0.98, angle_text, transform=ax.transAxes,
+                    fontsize=9, color='white', verticalalignment='top', family='monospace',
+                    bbox=dict(boxstyle='round', facecolor='#222222', alpha=0.8, edgecolor='white'))
 
         ax.set_xlabel('X (cm)', fontsize=12, color='#00ff00', weight='bold')
         ax.set_ylabel('Y (cm)', fontsize=12, color='#00ff00', weight='bold')
@@ -1237,6 +1290,106 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 QMessageBox.information(self, "Success", f"Landmarks saved to:\n{file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save: {str(e)}")
+
+    def save_analysis_csv(self):
+        """Save geometric analysis (angles and distances) to CSV."""
+        landmarks = self.canvas.get_landmarks()
+        crease1_points = landmarks.get('crease1', [])
+        crease2_points = landmarks.get('crease2', [])
+
+        if len(crease1_points) < 6 or len(crease2_points) < 6:
+            QMessageBox.warning(self, "Insufficient Data", "Need at least 6 points in Crease 1 and Crease 2.")
+            return
+
+        if not self.canvas.measurement_calc.scale_calibrated:
+            QMessageBox.warning(self, "No Calibration", "Please calibrate scale using AprilTag first.")
+            return
+
+        # Prepare CSV file
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Analysis", "hand_analysis", "CSV Files (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+
+            # Helper to convert to cm
+            def to_cm(p):
+                return np.array([p[0] / pixels_per_cm, p[1] / pixels_per_cm])
+
+            # Extract segments and calculate centers (in cm)
+            centers_c1 = []
+            centers_c2 = []
+            for i in range(0, 6, 2):
+                p1_c1 = to_cm(crease1_points[i])
+                p2_c1 = to_cm(crease1_points[i+1])
+                centers_c1.append((p1_c1 + p2_c1) / 2.0)
+
+                p1_c2 = to_cm(crease2_points[i])
+                p2_c2 = to_cm(crease2_points[i+1])
+                centers_c2.append((p1_c2 + p2_c2) / 2.0)
+
+            # Midpoints of verticals (P1, P2, P3)
+            P = []
+            Verticals = [] # Vectors for verticals (C1 -> C2)
+            for i in range(3):
+                c1 = centers_c1[i]
+                c2 = centers_c2[i]
+                P.append((c1 + c2) / 2.0)
+                Verticals.append(c2 - c1)
+
+            # Reference Lines vectors
+            Ref12 = P[1] - P[0]
+            Ref23 = P[2] - P[1]
+
+            # Calculate Angles (in degrees)
+            def calc_angle(v1, v2):
+                # Angle between two vectors
+                unit_v1 = v1 / np.linalg.norm(v1)
+                unit_v2 = v2 / np.linalg.norm(v2)
+                dot_product = np.dot(unit_v1, unit_v2)
+                angle = np.degrees(np.arccos(np.clip(dot_product, -1.0, 1.0)))
+                return angle
+
+            ang1 = calc_angle(Verticals[0], Ref12)
+            ang2 = calc_angle(Verticals[1], Ref12)
+            ang3 = calc_angle(Verticals[1], Ref23)
+            ang4 = calc_angle(Verticals[2], Ref23)
+
+            # Write to CSV
+            with open(file_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Metric', 'Value', 'Unit', 'Description'])
+                writer.writerow(['Angle 1', f"{ang1:.2f}", 'degrees', 'Vertical 1 (Index) vs Line 1-2'])
+                writer.writerow(['Angle 2', f"{ang2:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 1-2'])
+                writer.writerow(['Angle 3', f"{ang3:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 2-3'])
+                writer.writerow(['Angle 4', f"{ang4:.2f}", 'degrees', 'Vertical 3 (Ring) vs Line 2-3'])
+                
+                # Add distances for context
+                writer.writerow([])
+                writer.writerow(['Segment Distances', '', '', ''])
+                # C1 Segments
+                for i in range(len(centers_c1)-1):
+                    dist = np.linalg.norm(centers_c1[i+1] - centers_c1[i])
+                    writer.writerow([f'C1 Seg {i+1}-{i+2}', f"{dist:.2f}", 'cm', 'Along Crease 1'])
+                
+                # C2 Segments
+                for i in range(len(centers_c2)-1):
+                    dist = np.linalg.norm(centers_c2[i+1] - centers_c2[i])
+                    writer.writerow([f'C2 Seg {i+1}-{i+2}', f"{dist:.2f}", 'cm', 'Along Crease 2'])
+
+                # Verticals
+                for i in range(3):
+                    dist = np.linalg.norm(centers_c2[i] - centers_c1[i])
+                    writer.writerow([f'Vertical {i+1}', f"{dist:.2f}", 'cm', f'Cross-Crease {i+1}'])
+
+            QMessageBox.information(self, "Success", f"Analysis saved to:\n{file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save analysis: {str(e)}")
 
     def generate_pdf_report(self):
         """Generate a comprehensive PDF report with measurements."""

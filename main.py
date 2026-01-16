@@ -1,5 +1,6 @@
 import sys
 import json
+import csv
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
@@ -20,6 +21,11 @@ from reportlab.lib.units import inch, cm
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from PIL import Image as PILImage
+
+import matplotlib
+matplotlib.use('QtAgg')
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 
 class MeasurementCalculator:
@@ -205,34 +211,32 @@ class ReportGenerator:
                 elements.append(Spacer(1, 0.1*inch))
 
             # Measurements section
-            elements.append(Paragraph("Joint Distance Measurements", heading_style))
+            elements.append(Paragraph("Crease Distance Measurements", heading_style))
 
             # Create measurements table
-            measurements_data = [['Finger', 'Joint', 'Distance (cm)', 'Distance (px)']]
+            measurements_data = [['Crease', 'Points', 'Distance (cm)', 'Distance (px)']]
 
-            finger_labels = {
-                'thumb': 'Thumb',
-                'index': 'Index',
-                'middle': 'Middle',
-                'ring': 'Ring',
-                'pinky': 'Pinky'
+            crease_labels = {
+                'crease1': 'Crease 1',
+                'crease2': 'Crease 2',
+                'crease3': 'Crease 3'
             }
 
-            for finger in ['thumb', 'index', 'middle', 'ring', 'pinky']:
-                finger_measurements = measurements.get(finger, [])
-                if finger_measurements:
-                    for idx, dist_info in enumerate(finger_measurements):
+            for crease in ['crease1', 'crease2', 'crease3']:
+                crease_measurements = measurements.get(crease, [])
+                if crease_measurements:
+                    for idx, dist_info in enumerate(crease_measurements):
                         if idx == 0:
                             measurements_data.append([
-                                finger_labels[finger],
-                                f"J{dist_info['from_joint']}-{dist_info['to_joint']}",
+                                crease_labels[crease],
+                                f"p{dist_info['from_point']}→p{dist_info['to_point']}",
                                 f"{dist_info['cm_distance']:.2f}",
                                 f"{dist_info['pixel_distance']:.1f}"
                             ])
                         else:
                             measurements_data.append([
                                 '',
-                                f"J{dist_info['from_joint']}-{dist_info['to_joint']}",
+                                f"p{dist_info['from_point']}→p{dist_info['to_point']}",
                                 f"{dist_info['cm_distance']:.2f}",
                                 f"{dist_info['pixel_distance']:.1f}"
                             ])
@@ -285,13 +289,11 @@ class ImageCanvas(QFrame):
         self.image = None
         self.image_path = None
         self.selected_points: Dict[str, List[Tuple[int, int]]] = {
-            'thumb': [],
-            'index': [],
-            'middle': [],
-            'ring': [],
-            'pinky': []
+            'crease1': [],
+            'crease2': [],
+            'crease3': []
         }
-        self.current_finger = None
+        self.current_crease = None
         self.detected_tags = []
         self.point_radius = 6
         self.line_width = 2
@@ -354,14 +356,14 @@ class ImageCanvas(QFrame):
         except Exception as e:
             print(f"AprilTag detection error: {e}")
 
-    def set_current_finger(self, finger: str):
-        """Set the current finger for annotation."""
-        self.current_finger = finger
+    def set_current_crease(self, crease: str):
+        """Set the current crease for annotation."""
+        self.current_crease = crease
 
     def mousePressEvent(self, event):
         """Handle mouse click to add points."""
-        if self.image is None or self.current_finger is None:
-            QMessageBox.warning(self, "Warning", "Please load an image and select a finger first.")
+        if self.image is None or self.current_crease is None:
+            QMessageBox.warning(self, "Warning", "Please load an image and select a crease first.")
             return
 
         # Get click position relative to the image
@@ -380,34 +382,37 @@ class ImageCanvas(QFrame):
             return
 
         # Add point
-        self.selected_points[self.current_finger].append((x, y))
-        self.point_added.emit((self.current_finger, len(self.selected_points[self.current_finger]) - 1, (x, y)))
+        self.selected_points[self.current_crease].append((x, y))
+        self.point_added.emit((self.current_crease, len(self.selected_points[self.current_crease]) - 1, (x, y)))
         self.update()
 
     def calculate_joint_distances(self) -> Dict[str, List[Dict]]:
-        """Calculate distances between consecutive joints for each finger."""
+        """Calculate distances only for pairs (p0-p1, p2-p3, p4-p5, etc.).
+        Skips gaps between segments (p1-p2, p3-p4, etc.)."""
         distances = {}
 
-        for finger, points in self.selected_points.items():
-            finger_distances = []
+        for crease, points in self.selected_points.items():
+            crease_distances = []
 
             if len(points) >= 2:
-                for i in range(len(points) - 1):
-                    p1 = np.array(points[i])
-                    p2 = np.array(points[i + 1])
+                # Only measure pairs: (0,1), (2,3), (4,5), etc.
+                for i in range(0, len(points) - 1, 2):
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        p1 = np.array(points[i])
+                        p2 = np.array(points[i + 1])
 
-                    pixel_dist = np.linalg.norm(p2 - p1)
-                    cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        pixel_dist = float(np.linalg.norm(p2 - p1))
+                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                    distance_info = {
-                        'from_joint': i,
-                        'to_joint': i + 1,
-                        'pixel_distance': round(pixel_dist, 2),
-                        'cm_distance': round(cm_dist, 2)
-                    }
-                    finger_distances.append(distance_info)
+                        distance_info = {
+                            'from_point': i,
+                            'to_point': i + 1,
+                            'pixel_distance': round(pixel_dist, 2),
+                            'cm_distance': round(cm_dist, 2)
+                        }
+                        crease_distances.append(distance_info)
 
-            distances[finger] = finger_distances
+            distances[crease] = crease_distances
 
         return distances
 
@@ -432,39 +437,39 @@ class ImageCanvas(QFrame):
 
         # Draw all selected points
         colors = {
-            'thumb': (255, 0, 0),      # Blue
-            'index': (0, 255, 0),      # Green
-            'middle': (0, 0, 255),     # Red
-            'ring': (255, 255, 0),     # Cyan
-            'pinky': (255, 0, 255)     # Magenta
+            'crease1': (255, 0, 0),      # Blue
+            'crease2': (0, 255, 0),      # Green
+            'crease3': (0, 0, 255)       # Red
         }
 
-        for finger, points in self.selected_points.items():
-            color = colors[finger]
+        for crease, points in self.selected_points.items():
+            color = colors[crease]
             for idx, (x, y) in enumerate(points):
                 cv2.circle(display_image, (x, y), self.point_radius, color, -1)
                 cv2.putText(display_image, f"{idx}", (x + 10, y - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # Draw skeleton connections if enough points
+            # Draw skeleton connections only for pairs (p0-p1, p2-p3, p4-p5, etc.)
+            # Skip gaps between pairs (p1-p2, p3-p4, etc.)
             if len(points) > 1:
-                for i in range(len(points) - 1):
-                    cv2.line(display_image, points[i], points[i+1], color, 2)
+                for i in range(0, len(points) - 1, 2):  # Only even indices (0, 2, 4, ...)
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        cv2.line(display_image, points[i], points[i+1], color, 2)
 
-                    # Draw distance text if showing measurements
-                    if self.show_measurements and self.measurement_calc.scale_calibrated:
-                        p1 = np.array(points[i])
-                        p2 = np.array(points[i+1])
-                        pixel_dist = np.linalg.norm(p2 - p1)
-                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        # Draw distance text if showing measurements
+                        if self.show_measurements and self.measurement_calc.scale_calibrated:
+                            p1 = np.array(points[i])
+                            p2 = np.array(points[i+1])
+                            pixel_dist = float(np.linalg.norm(p2 - p1))
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                        # Midpoint for text
-                        mid_x = int((points[i][0] + points[i+1][0]) / 2)
-                        mid_y = int((points[i][1] + points[i+1][1]) / 2)
+                            # Midpoint for text
+                            mid_x = int((points[i][0] + points[i+1][0]) / 2)
+                            mid_y = int((points[i][1] + points[i+1][1]) / 2)
 
-                        text = f"{cm_dist:.1f}cm"
-                        cv2.putText(display_image, text, (mid_x, mid_y - 5),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            text = f"{cm_dist:.1f}cm"
+                            cv2.putText(display_image, text, (mid_x, mid_y - 5),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         # Convert to QPixmap
         rgb_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
@@ -481,20 +486,20 @@ class ImageCanvas(QFrame):
 
     def undo_last_point(self):
         """Remove the last added point."""
-        if self.current_finger and self.selected_points[self.current_finger]:
-            self.selected_points[self.current_finger].pop()
+        if self.current_crease and self.selected_points[self.current_crease]:
+            self.selected_points[self.current_crease].pop()
             self.update()
 
-    def clear_finger(self):
-        """Clear all points for current finger."""
-        if self.current_finger:
-            self.selected_points[self.current_finger] = []
+    def clear_crease(self):
+        """Clear all points for current crease."""
+        if self.current_crease:
+            self.selected_points[self.current_crease] = []
             self.update()
 
     def clear_all(self):
-        """Clear all points for all fingers."""
-        for finger in self.selected_points:
-            self.selected_points[finger] = []
+        """Clear all points for all creases."""
+        for crease in self.selected_points:
+            self.selected_points[crease] = []
         self.update()
 
     def get_landmarks(self) -> Dict:
@@ -523,39 +528,39 @@ class ImageCanvas(QFrame):
 
         # Draw all selected points
         colors = {
-            'thumb': (255, 0, 0),      # Blue
-            'index': (0, 255, 0),      # Green
-            'middle': (0, 0, 255),     # Red
-            'ring': (255, 255, 0),     # Cyan
-            'pinky': (255, 0, 255)     # Magenta
+            'crease1': (255, 0, 0),      # Blue
+            'crease2': (0, 255, 0),      # Green
+            'crease3': (0, 0, 255)       # Red
         }
 
-        for finger, points in self.selected_points.items():
-            color = colors[finger]
+        for crease, points in self.selected_points.items():
+            color = colors[crease]
             for idx, (x, y) in enumerate(points):
                 cv2.circle(display_image, (x, y), self.point_radius, color, -1)
                 cv2.putText(display_image, f"{idx}", (x + 10, y - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # Draw skeleton connections if enough points
+            # Draw skeleton connections only for pairs (p0-p1, p2-p3, p4-p5, etc.)
+            # Skip gaps between pairs (p1-p2, p3-p4, etc.)
             if len(points) > 1:
-                for i in range(len(points) - 1):
-                    cv2.line(display_image, points[i], points[i+1], color, 2)
+                for i in range(0, len(points) - 1, 2):  # Only even indices (0, 2, 4, ...)
+                    if i + 1 < len(points):  # Make sure we have a pair
+                        cv2.line(display_image, points[i], points[i+1], color, 2)
 
-                    # Draw distance text if showing measurements
-                    if self.show_measurements and self.measurement_calc.scale_calibrated:
-                        p1 = np.array(points[i])
-                        p2 = np.array(points[i+1])
-                        pixel_dist = float(np.linalg.norm(p2 - p1))
-                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        # Draw distance text if showing measurements
+                        if self.show_measurements and self.measurement_calc.scale_calibrated:
+                            p1 = np.array(points[i])
+                            p2 = np.array(points[i+1])
+                            pixel_dist = float(np.linalg.norm(p2 - p1))
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
 
-                        # Midpoint for text
-                        mid_x = int((points[i][0] + points[i+1][0]) / 2)
-                        mid_y = int((points[i][1] + points[i+1][1]) / 2)
+                            # Midpoint for text
+                            mid_x = int((points[i][0] + points[i+1][0]) / 2)
+                            mid_y = int((points[i][1] + points[i+1][1]) / 2)
 
-                        text = f"{cm_dist:.1f}cm"
-                        cv2.putText(display_image, text, (mid_x, mid_y - 5),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            text = f"{cm_dist:.1f}cm"
+                            cv2.putText(display_image, text, (mid_x, mid_y - 5),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         return display_image
 
@@ -582,6 +587,22 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.canvas.apriltag_detected.connect(self.on_apriltag_detected)
         self.canvas.scale_calibrated.connect(self.on_scale_calibrated)
 
+        # Center - Geometric plot canvas
+        self.figure = Figure(figsize=(10, 10))
+        self.plot_canvas = FigureCanvas(self.figure)
+        self.plot_canvas.setStyleSheet("background-color: #1a1a1a; border: 2px solid #333;")
+
+        # Create container for center area (to switch between image and plot)
+        self.center_container = QWidget()
+        center_layout = QVBoxLayout(self.center_container)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.addWidget(self.canvas)
+        center_layout.addWidget(self.plot_canvas)
+
+        # Initially show canvas, hide plot
+        self.plot_canvas.hide()
+        self.view_mode = "image"  # "image" or "plot"
+
         # Left panel - Controls
         left_panel = self.create_left_panel()
 
@@ -589,7 +610,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         right_panel = self.create_right_panel()
 
         main_layout.addWidget(left_panel, 1)
-        main_layout.addWidget(self.canvas, 3)
+        main_layout.addWidget(self.center_container, 3)
         main_layout.addWidget(right_panel, 1)
 
         self.show()
@@ -607,35 +628,40 @@ class HandAnnotationWithMeasurements(QMainWindow):
         load_btn.clicked.connect(self.load_image)
         layout.addWidget(load_btn)
 
-        # Finger Selection
-        finger_label = QLabel("Select Finger:")
-        finger_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF;")
-        layout.addWidget(finger_label)
-        self.finger_combo = QComboBox()
-        self.finger_combo.addItems(["Thumb", "Index", "Middle", "Ring", "Pinky"])
-        self.finger_combo.setCurrentIndex(-1)  # Start with no selection
-        self.finger_combo.setStyleSheet("font-size: 11px; padding: 5px; border-radius: 3px; border: 1px solid #bbb;")
-        self.finger_combo.setMinimumHeight(32)
-        self.finger_combo.currentTextChanged.connect(self.on_finger_selected)
-        layout.addWidget(self.finger_combo)
+        # View Mode Toggle
+        self.view_toggle_btn = QPushButton("📊 Switch to Plot View")
+        self.view_toggle_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+        self.view_toggle_btn.setMinimumHeight(40)
+        self.view_toggle_btn.clicked.connect(self.toggle_view_mode)
+        layout.addWidget(self.view_toggle_btn)
+
+        layout.addSpacing(10)
+
+        # Crease Selection
+        crease_label = QLabel("Select Crease:")
+        crease_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF;")
+        layout.addWidget(crease_label)
+        self.crease_combo = QComboBox()
+        self.crease_combo.addItems(["Crease 1", "Crease 2", "Crease 3"])
+        self.crease_combo.setCurrentIndex(-1)  # Start with no selection
+        self.crease_combo.setStyleSheet("font-size: 11px; padding: 5px; border-radius: 3px; border: 1px solid #bbb;")
+        self.crease_combo.setMinimumHeight(32)
+        self.crease_combo.currentTextChanged.connect(self.on_crease_selected)
+        layout.addWidget(self.crease_combo)
 
         # Point counter
-        points_label = QLabel("Points Added:")
+        points_label = QLabel("Points in Current Crease:")
         points_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(points_label)
-        self.point_counter = QLabel("0 / 4")
+        self.point_counter = QLabel("0 points")
         self.point_counter.setStyleSheet("font-size: 16px; font-weight: bold; color: #2196F3; padding: 8px; background-color: #f0f8ff; border-radius: 3px;")
         layout.addWidget(self.point_counter)
 
-        # Point labels
-        labels_title = QLabel("Point Labels:")
-        labels_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF; margin-top: 10px;")
-        layout.addWidget(labels_title)
-        for i in range(4):
-            label_text = ["Start", "Joint 1", "Joint 2", "End"][i]
-            label = QLabel(f"  {i}: {label_text}")
-            label.setStyleSheet("font-size: 10px; color: #E0E0E0;")
-            layout.addWidget(label)
+        # Instructions
+        instructions = QLabel("Click on the image to add points\nalong the selected crease.\n\nDistances will be measured\nsequentially: p0→p1, p1→p2, etc.")
+        instructions.setStyleSheet("font-size: 10px; color: #E0E0E0; font-style: italic; margin-top: 10px; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 3px;")
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
 
         # Measurement section
         layout.addSpacing(15)
@@ -668,11 +694,11 @@ class HandAnnotationWithMeasurements(QMainWindow):
         undo_btn.clicked.connect(self.undo_point)
         layout.addWidget(undo_btn)
 
-        clear_finger_btn = QPushButton("🗑️ Clear Current Finger")
-        clear_finger_btn.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
-        clear_finger_btn.setMinimumHeight(32)
-        clear_finger_btn.clicked.connect(self.clear_current_finger)
-        layout.addWidget(clear_finger_btn)
+        clear_crease_btn = QPushButton("🗑️ Clear Current Crease")
+        clear_crease_btn.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        clear_crease_btn.setMinimumHeight(32)
+        clear_crease_btn.clicked.connect(self.clear_current_crease)
+        layout.addWidget(clear_crease_btn)
 
         clear_all_btn = QPushButton("⚠️ Clear All")
         clear_all_btn.setStyleSheet("background-color: #F44336; color: white; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
@@ -681,6 +707,20 @@ class HandAnnotationWithMeasurements(QMainWindow):
         layout.addWidget(clear_all_btn)
 
         layout.addSpacing(15)
+
+        # Save Landmarks
+        save_btn = QPushButton("💾 Save Landmarks (JSON)")
+        save_btn.setStyleSheet("background-color: #00cc00; color: white; font-weight: bold; font-size: 11px; padding: 10px; border-radius: 5px;")
+        save_btn.setMinimumHeight(44)
+        save_btn.clicked.connect(self.save_landmarks)
+        layout.addWidget(save_btn)
+
+        # Save Analysis CSV
+        save_csv_btn = QPushButton("💾 Save Analysis (CSV)")
+        save_csv_btn.setStyleSheet("background-color: #009900; color: white; font-weight: bold; font-size: 11px; padding: 10px; border-radius: 5px;")
+        save_csv_btn.setMinimumHeight(44)
+        save_csv_btn.clicked.connect(self.save_analysis_csv)
+        layout.addWidget(save_csv_btn)
 
         # Generate PDF Report
         report_btn = QPushButton("📄 Generate Report (PDF)")
@@ -776,28 +816,26 @@ class HandAnnotationWithMeasurements(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load image: {str(e)}")
 
-    def on_finger_selected(self, finger_text: str):
-        """Handle finger selection."""
+    def on_crease_selected(self, crease_text: str):
+        """Handle crease selection."""
         # Ignore empty selection
-        if not finger_text:
+        if not crease_text:
             return
 
-        finger_map = {
-            "Thumb": "thumb",
-            "Index": "index",
-            "Middle": "middle",
-            "Ring": "ring",
-            "Pinky": "pinky"
+        crease_map = {
+            "Crease 1": "crease1",
+            "Crease 2": "crease2",
+            "Crease 3": "crease3"
         }
-        finger = finger_map.get(finger_text)
-        if finger:
-            self.canvas.set_current_finger(finger)
+        crease = crease_map.get(crease_text)
+        if crease:
+            self.canvas.set_current_crease(crease)
             self.update_point_counter()
 
     def on_point_added(self, data):
         """Handle point added event."""
-        finger, idx, pos = data
-        print(f"Added {finger} point {idx}: {pos}")
+        crease, idx, pos = data
+        print(f"Added {crease} point {idx}: {pos}")
         self.update_point_counter()
         self.update_landmarks_display()
         self.update_measurements_display()
@@ -833,14 +871,15 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
     def update_point_counter(self):
         """Update the point counter display."""
-        if self.canvas.current_finger:
-            count = len(self.canvas.selected_points[self.canvas.current_finger])
-            self.point_counter.setText(f"{count} / 4")
+        if self.canvas.current_crease:
+            count = len(self.canvas.selected_points[self.canvas.current_crease])
+            point_word = "point" if count == 1 else "points"
+            self.point_counter.setText(f"{count} {point_word}")
 
-            # Color change based on progress
+            # Color change based on count
             if count == 0:
                 color = "gray"
-            elif count < 4:
+            elif count == 1:
                 color = "orange"
             else:
                 color = "green"
@@ -855,35 +894,30 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 item.widget().deleteLater()
 
         landmarks = self.canvas.get_landmarks()
-        finger_labels = {
-            'thumb': 'Thumb',
-            'index': 'Index',
-            'middle': 'Middle',
-            'ring': 'Ring',
-            'pinky': 'Pinky'
+        crease_labels = {
+            'crease1': 'Crease 1',
+            'crease2': 'Crease 2',
+            'crease3': 'Crease 3'
         }
-        point_names = ['Start', 'Joint 1', 'Joint 2', 'End']
 
         colors = {
-            'thumb': '#6666FF',      # Blue
-            'index': '#66FF66',      # Green
-            'middle': '#FF6666',     # Red
-            'ring': '#FFFF66',       # Yellow
-            'pinky': '#FF66FF'       # Magenta
+            'crease1': '#6666FF',      # Blue
+            'crease2': '#66FF66',      # Green
+            'crease3': '#FF6666'       # Red
         }
 
-        for finger in ['thumb', 'index', 'middle', 'ring', 'pinky']:
-            points = landmarks[finger]
+        for crease in ['crease1', 'crease2', 'crease3']:
+            points = landmarks[crease]
 
-            # Finger header
-            header = QLabel(f"{finger_labels[finger].upper()} ({len(points)}/4)")
-            header.setStyleSheet(f"background-color: {colors[finger]}; color: white; padding: 5px; font-weight: bold;")
+            # Crease header
+            header = QLabel(f"{crease_labels[crease].upper()} ({len(points)} points)")
+            header.setStyleSheet(f"background-color: {colors[crease]}; color: white; padding: 5px; font-weight: bold;")
             self.landmarks_layout.addWidget(header)
 
             # Points
             for idx, (x, y) in enumerate(points):
-                point_label = QLabel(f"  {point_names[idx]}: ({x}, {y})")
-                point_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[finger]};")
+                point_label = QLabel(f"  p{idx}: ({x}, {y})")
+                point_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[crease]};")
                 self.landmarks_layout.addWidget(point_label)
 
         self.landmarks_layout.addStretch()
@@ -906,50 +940,276 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
         distances = self.canvas.calculate_joint_distances()
 
-        finger_labels = {
-            'thumb': 'Thumb',
-            'index': 'Index',
-            'middle': 'Middle',
-            'ring': 'Ring',
-            'pinky': 'Pinky'
+        crease_labels = {
+            'crease1': 'Crease 1',
+            'crease2': 'Crease 2',
+            'crease3': 'Crease 3'
         }
 
         colors = {
-            'thumb': '#6666FF',
-            'index': '#66FF66',
-            'middle': '#FF6666',
-            'ring': '#FFFF66',
-            'pinky': '#FF66FF'
+            'crease1': '#6666FF',
+            'crease2': '#66FF66',
+            'crease3': '#FF6666'
         }
 
         has_measurements = False
 
-        for finger in ['thumb', 'index', 'middle', 'ring', 'pinky']:
-            finger_distances = distances[finger]
+        for crease in ['crease1', 'crease2', 'crease3']:
+            crease_distances = distances[crease]
 
-            if finger_distances:
+            if crease_distances:
                 has_measurements = True
 
-                # Finger header
-                header = QLabel(f"{finger_labels[finger].upper()}")
-                header.setStyleSheet(f"background-color: {colors[finger]}; color: white; padding: 5px; font-weight: bold;")
+                # Crease header
+                header = QLabel(f"{crease_labels[crease].upper()}")
+                header.setStyleSheet(f"background-color: {colors[crease]}; color: white; padding: 5px; font-weight: bold;")
                 self.measurements_layout.addWidget(header)
 
-                # Distances
-                for dist_info in finger_distances:
-                    dist_text = (f"  Joint {dist_info['from_joint']} → {dist_info['to_joint']}: "
+                # Distances (sequential: p0→p1, p1→p2, etc.)
+                for dist_info in crease_distances:
+                    dist_text = (f"  p{dist_info['from_point']} → p{dist_info['to_point']}: "
                                 f"{dist_info['cm_distance']:.2f} cm "
                                 f"({dist_info['pixel_distance']:.1f} px)")
                     dist_label = QLabel(dist_text)
-                    dist_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[finger]}; font-family: monospace;")
+                    dist_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[crease]}; font-family: monospace;")
                     self.measurements_layout.addWidget(dist_label)
 
         if not has_measurements:
-            empty_label = QLabel("Add finger landmarks to see measurements")
+            empty_label = QLabel("Add crease points to see measurements")
             empty_label.setStyleSheet("color: gray; font-style: italic; padding: 10px;")
             self.measurements_layout.addWidget(empty_label)
 
         self.measurements_layout.addStretch()
+
+    def toggle_view_mode(self):
+        """Toggle between image view and plot view."""
+        if self.view_mode == "image":
+            # Switch to plot view
+            self.canvas.hide()
+            self.plot_canvas.show()
+            self.view_mode = "plot"
+            self.view_toggle_btn.setText("🖼️ Switch to Image View")
+            self.view_toggle_btn.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+            # Update plot when switching to it
+            self.update_geometric_plot()
+        else:
+            # Switch to image view
+            self.plot_canvas.hide()
+            self.canvas.show()
+            self.view_mode = "image"
+            self.view_toggle_btn.setText("📊 Switch to Plot View")
+            self.view_toggle_btn.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; font-size: 11px; padding: 8px; border-radius: 5px;")
+
+    def update_geometric_plot(self):
+        """Update geometric plot showing segment centers and connections in CAD style with cm units."""
+        self.figure.clear()
+
+        # Set dark background for CAD style
+        self.figure.patch.set_facecolor('#1a1a1a')
+        ax = self.figure.add_subplot(111)
+        ax.set_facecolor('#0a0a0a')
+
+        landmarks = self.canvas.get_landmarks()
+        crease1_points = landmarks.get('crease1', [])
+        crease2_points = landmarks.get('crease2', [])
+
+        # Check if calibration is available
+        if not self.canvas.measurement_calc.scale_calibrated:
+            ax.text(0.5, 0.5, 'Please load an image with\nAprilTag for calibration',
+                   ha='center', va='center', fontsize=14, color='#00ff00',
+                   transform=ax.transAxes, weight='bold')
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            self.plot_canvas.draw()
+            return
+
+        # We need at least 6 points (3 segments) from each crease
+        if len(crease1_points) < 6 or len(crease2_points) < 6:
+            ax.text(0.5, 0.5, 'Need at least 6 points in\nCrease 1 and Crease 2\n(3 segments each)',
+                   ha='center', va='center', fontsize=14, color='#00ff00',
+                   transform=ax.transAxes, weight='bold')
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            self.plot_canvas.draw()
+            return
+
+        # Get pixels per cm for conversion
+        pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+
+        # Convert pixel coordinates to cm
+        def pixels_to_cm(points):
+            """Convert list of pixel coordinates to cm."""
+            cm_points = []
+            for x, y in points:
+                cm_x = x / pixels_per_cm
+                cm_y = y / pixels_per_cm
+                cm_points.append((cm_x, cm_y))
+            return cm_points
+
+        crease1_cm = pixels_to_cm(crease1_points)
+        crease2_cm = pixels_to_cm(crease2_points)
+
+        # Extract first 3 segments (index, middle, ring fingers)
+        # seg1: p0-p1, seg2: p2-p3, seg3: p4-p5
+        def get_segments(points):
+            """Extract first 3 segments and their centers."""
+            segments = []
+            centers = []
+            for i in range(0, 6, 2):  # 0, 2, 4
+                if i + 1 < len(points):
+                    p0 = np.array(points[i])
+                    p1 = np.array(points[i + 1])
+                    center = (p0 + p1) / 2.0
+                    segments.append((p0, p1))
+                    centers.append(center)
+            return segments, centers
+
+        crease1_segs, crease1_centers = get_segments(crease1_cm)
+        crease2_segs, crease2_centers = get_segments(crease2_cm)
+
+        # Plot crease 1 segments and centers (Cyan - CAD style)
+        for i, (p0, p1) in enumerate(crease1_segs):
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#00ffff', linewidth=3, alpha=0.8, label=f'C1 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'o', color='#00ffff', markersize=8)
+            ax.plot(p1[0], p1[1], 'o', color='#00ffff', markersize=8)
+
+        # Plot crease 1 center connections
+        if len(crease1_centers) >= 2:
+            centers_array = np.array(crease1_centers)
+            ax.plot(centers_array[:, 0], centers_array[:, 1], '--', color='#00ffff', linewidth=2, alpha=0.6, label='C1 Centers')
+            for center in crease1_centers:
+                ax.plot(center[0], center[1], 's', color='#00ffff', markersize=10)
+
+        # Plot crease 2 segments and centers (Yellow - CAD style)
+        for i, (p0, p1) in enumerate(crease2_segs):
+            ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#ffff00', linewidth=3, alpha=0.8, label=f'C2 Seg{i+1}' if i == 0 else '')
+            ax.plot(p0[0], p0[1], 'o', color='#ffff00', markersize=8)
+            ax.plot(p1[0], p1[1], 'o', color='#ffff00', markersize=8)
+
+        # Plot crease 2 center connections
+        if len(crease2_centers) >= 2:
+            centers_array = np.array(crease2_centers)
+            ax.plot(centers_array[:, 0], centers_array[:, 1], '--', color='#ffff00', linewidth=2, alpha=0.6, label='C2 Centers')
+            for center in crease2_centers:
+                ax.plot(center[0], center[1], 's', color='#ffff00', markersize=10)
+
+        # Add segment labels
+        segment_labels = ['Index', 'Middle', 'Ring']
+        for i, center in enumerate(crease1_centers):
+            if i < len(segment_labels):
+                ax.text(center[0], center[1] - 0.3, segment_labels[i],
+                       ha='center', fontsize=11, color='#00ffff', weight='bold')
+
+        # Add dimension annotations for Crease 1 (along crease)
+        for i in range(len(crease1_centers) - 1):
+            c1 = crease1_centers[i]
+            c2 = crease1_centers[i + 1]
+            dist = float(np.linalg.norm(c2 - c1))
+            mid = (c1 + c2) / 2
+            ax.text(mid[0], mid[1] + 0.3, f'C1: {dist:.2f} cm',
+                   ha='center', fontsize=9, color='#00ffff', weight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#00ffff', linewidth=1))
+
+        # Add dimension annotations for Crease 2 (along crease)
+        for i in range(len(crease2_centers) - 1):
+            c1 = crease2_centers[i]
+            c2 = crease2_centers[i + 1]
+            dist = float(np.linalg.norm(c2 - c1))
+            mid = (c1 + c2) / 2
+            ax.text(mid[0], mid[1] - 0.3, f'C2: {dist:.2f} cm',
+                   ha='center', fontsize=9, color='#ffff00', weight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ffff00', linewidth=1))
+
+        # Add cross-crease connections (c1:seg1 to c2:seg1, etc.)
+        if len(crease1_centers) == 3 and len(crease2_centers) == 3:
+            vertical_mids = []
+            vertical_vectors = []
+
+            for i in range(3):  # seg1, seg2, seg3
+                c1_center = crease1_centers[i]
+                c2_center = crease2_centers[i]
+
+                # Draw connection line (magenta/pink for cross-crease)
+                ax.plot([c1_center[0], c2_center[0]], [c1_center[1], c2_center[1]],
+                       color='#ff00ff', linewidth=2, alpha=0.6, linestyle=':')
+
+                # Calculate and display distance
+                dist = float(np.linalg.norm(c2_center - c1_center))
+                mid = (c1_center + c2_center) / 2
+                vertical_mids.append(mid)
+                vertical_vectors.append(c2_center - c1_center)
+
+                # Offset text based on segment to avoid overlap
+                offset_x = 0.5 if i == 1 else -0.5 if i == 0 else 0.5
+                ax.text(mid[0] + offset_x, mid[1], f'{dist:.2f} cm',
+                       ha='center', fontsize=9, color='#ff00ff', weight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ff00ff', linewidth=1))
+
+            # --- Angle Calculation & Visualization ---
+            vertical_mids = np.array(vertical_mids)
+
+            # Draw Reference Lines (connecting vertical midpoints)
+            # Line 1-2 (Index Mid -> Middle Mid)
+            ax.plot([vertical_mids[0][0], vertical_mids[1][0]], 
+                    [vertical_mids[0][1], vertical_mids[1][1]], 
+                    color='white', linestyle='-.', linewidth=1.5, alpha=0.7, label='Ref Line 1-2')
+            
+            # Line 2-3 (Middle Mid -> Ring Mid)
+            ax.plot([vertical_mids[1][0], vertical_mids[2][0]], 
+                    [vertical_mids[1][1], vertical_mids[2][1]], 
+                    color='white', linestyle='-.', linewidth=1.5, alpha=0.7, label='Ref Line 2-3')
+
+            # Calculate Angles
+            def get_angle(v1, v2):
+                u1 = v1 / np.linalg.norm(v1)
+                u2 = v2 / np.linalg.norm(v2)
+                return np.degrees(np.arccos(np.clip(np.dot(u1, u2), -1.0, 1.0)))
+
+            ref_12 = vertical_mids[1] - vertical_mids[0]
+            ref_23 = vertical_mids[2] - vertical_mids[1]
+
+            ang1 = get_angle(vertical_vectors[0], ref_12)
+            ang2 = 180 - get_angle(vertical_vectors[1], ref_12) 
+            ang3 = get_angle(vertical_vectors[1], ref_23)
+            ang4 = 180 - get_angle(vertical_vectors[2], ref_23) 
+
+            # Display Angles in a box on the plot
+            angle_text = (
+                f"ANGLES:\n"
+                f"Ang1 (V1/Ref1-2): {ang1:.1f}°\n"
+                f"Ang2 (V2/Ref1-2): {ang2:.1f}°\n"
+                f"Ang3 (V2/Ref2-3): {ang3:.1f}°\n"
+                f"Ang4 (V3/Ref2-3): {ang4:.1f}°"
+            )
+            ax.text(0.02, 0.98, angle_text, transform=ax.transAxes,
+                    fontsize=9, color='white', verticalalignment='top', family='monospace',
+                    bbox=dict(boxstyle='round', facecolor='#222222', alpha=0.8, edgecolor='white'))
+
+        ax.set_xlabel('X (cm)', fontsize=12, color='#00ff00', weight='bold')
+        ax.set_ylabel('Y (cm)', fontsize=12, color='#00ff00', weight='bold')
+        ax.set_title('CAD-Style Crease Segment Geometry\n(Cyan: Crease 1, Yellow: Crease 2)',
+                    fontsize=13, color='#00ff00', weight='bold', pad=20)
+
+        # CAD-style legend
+        legend = ax.legend(loc='upper right', fontsize=10, facecolor='#1a1a1a',
+                          edgecolor='#00ff00', framealpha=0.9)
+        for text in legend.get_texts():
+            text.set_color('#00ff00')
+
+        # CAD-style grid
+        ax.grid(True, alpha=0.3, color='#00ff00', linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#00ff00', which='both')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#00ff00')
+            spine.set_linewidth(2)
+
+        ax.invert_yaxis()  # Invert Y axis to match image coordinates
+        ax.set_aspect('equal', adjustable='box')
+
+        self.figure.tight_layout()
+        self.plot_canvas.draw()
 
     def undo_point(self):
         """Undo last point."""
@@ -958,15 +1218,15 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.update_landmarks_display()
         self.update_measurements_display()
 
-    def clear_current_finger(self):
-        """Clear points for current finger."""
-        if self.canvas.current_finger:
+    def clear_current_crease(self):
+        """Clear points for current crease."""
+        if self.canvas.current_crease:
             reply = QMessageBox.question(
                 self, "Confirm",
-                f"Clear all points for {self.canvas.current_finger}?"
+                f"Clear all points for {self.canvas.current_crease}?"
             )
             if reply == QMessageBox.Yes:
-                self.canvas.clear_finger()
+                self.canvas.clear_crease()
                 self.update_point_counter()
                 self.update_landmarks_display()
                 self.update_measurements_display()
@@ -975,7 +1235,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         """Clear all points."""
         reply = QMessageBox.question(
             self, "Confirm",
-            "Clear all landmarks for all fingers?"
+            "Clear all landmarks for all creases?"
         )
         if reply == QMessageBox.Yes:
             self.canvas.clear_all()
@@ -987,31 +1247,29 @@ class HandAnnotationWithMeasurements(QMainWindow):
         """Save landmarks to JSON file with measurements."""
         landmarks = self.canvas.get_landmarks()
 
-        # Check if all fingers have 4 points
-        incomplete = [f for f, p in landmarks.items() if len(p) != 4]
+        # Check if any creases have no points
+        empty_creases = [c for c, p in landmarks.items() if len(p) == 0]
 
-        if incomplete:
-            reply = QMessageBox.warning(
-                self, "Incomplete Data",
-                f"Incomplete fingers: {', '.join(incomplete)}\n\nSave anyway?",
-                QMessageBox.Yes | QMessageBox.No
+        if len(empty_creases) == 3:
+            QMessageBox.warning(
+                self, "No Data",
+                "No points have been added. Please add points before saving."
             )
-            if reply != QMessageBox.Yes:
-                return
+            return
 
         # Save dialog
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Landmarks", "hand_landmarks",
+            self, "Save Landmarks", "hand_crease_landmarks",
             "JSON Files (*.json)"
         )
 
         if file_path:
             try:
-                # Format: finger_joint_index
+                # Format: crease_finger_index (e.g., crease1_0 = crease 1, thumb)
                 formatted_data = {}
-                for finger, points in landmarks.items():
+                for crease, points in landmarks.items():
                     for idx, (x, y) in enumerate(points):
-                        key = f"{finger}_{idx}"
+                        key = f"{crease}_{idx}"
                         formatted_data[key] = {"x": x, "y": y}
 
                 # Add image path
@@ -1032,6 +1290,106 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 QMessageBox.information(self, "Success", f"Landmarks saved to:\n{file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save: {str(e)}")
+
+    def save_analysis_csv(self):
+        """Save geometric analysis (angles and distances) to CSV."""
+        landmarks = self.canvas.get_landmarks()
+        crease1_points = landmarks.get('crease1', [])
+        crease2_points = landmarks.get('crease2', [])
+
+        if len(crease1_points) < 6 or len(crease2_points) < 6:
+            QMessageBox.warning(self, "Insufficient Data", "Need at least 6 points in Crease 1 and Crease 2.")
+            return
+
+        if not self.canvas.measurement_calc.scale_calibrated:
+            QMessageBox.warning(self, "No Calibration", "Please calibrate scale using AprilTag first.")
+            return
+
+        # Prepare CSV file
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Analysis", "hand_analysis", "CSV Files (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+
+            # Helper to convert to cm
+            def to_cm(p):
+                return np.array([p[0] / pixels_per_cm, p[1] / pixels_per_cm])
+
+            # Extract segments and calculate centers (in cm)
+            centers_c1 = []
+            centers_c2 = []
+            for i in range(0, 6, 2):
+                p1_c1 = to_cm(crease1_points[i])
+                p2_c1 = to_cm(crease1_points[i+1])
+                centers_c1.append((p1_c1 + p2_c1) / 2.0)
+
+                p1_c2 = to_cm(crease2_points[i])
+                p2_c2 = to_cm(crease2_points[i+1])
+                centers_c2.append((p1_c2 + p2_c2) / 2.0)
+
+            # Midpoints of verticals (P1, P2, P3)
+            P = []
+            Verticals = [] # Vectors for verticals (C1 -> C2)
+            for i in range(3):
+                c1 = centers_c1[i]
+                c2 = centers_c2[i]
+                P.append((c1 + c2) / 2.0)
+                Verticals.append(c2 - c1)
+
+            # Reference Lines vectors
+            Ref12 = P[1] - P[0]
+            Ref23 = P[2] - P[1]
+
+            # Calculate Angles (in degrees)
+            def calc_angle(v1, v2):
+                # Angle between two vectors
+                unit_v1 = v1 / np.linalg.norm(v1)
+                unit_v2 = v2 / np.linalg.norm(v2)
+                dot_product = np.dot(unit_v1, unit_v2)
+                angle = np.degrees(np.arccos(np.clip(dot_product, -1.0, 1.0)))
+                return angle
+
+            ang1 = calc_angle(Verticals[0], Ref12)
+            ang2 = calc_angle(Verticals[1], Ref12)
+            ang3 = calc_angle(Verticals[1], Ref23)
+            ang4 = calc_angle(Verticals[2], Ref23)
+
+            # Write to CSV
+            with open(file_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Metric', 'Value', 'Unit', 'Description'])
+                writer.writerow(['Angle 1', f"{ang1:.2f}", 'degrees', 'Vertical 1 (Index) vs Line 1-2'])
+                writer.writerow(['Angle 2', f"{ang2:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 1-2'])
+                writer.writerow(['Angle 3', f"{ang3:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 2-3'])
+                writer.writerow(['Angle 4', f"{ang4:.2f}", 'degrees', 'Vertical 3 (Ring) vs Line 2-3'])
+                
+                # Add distances for context
+                writer.writerow([])
+                writer.writerow(['Segment Distances', '', '', ''])
+                # C1 Segments
+                for i in range(len(centers_c1)-1):
+                    dist = np.linalg.norm(centers_c1[i+1] - centers_c1[i])
+                    writer.writerow([f'C1 Seg {i+1}-{i+2}', f"{dist:.2f}", 'cm', 'Along Crease 1'])
+                
+                # C2 Segments
+                for i in range(len(centers_c2)-1):
+                    dist = np.linalg.norm(centers_c2[i+1] - centers_c2[i])
+                    writer.writerow([f'C2 Seg {i+1}-{i+2}', f"{dist:.2f}", 'cm', 'Along Crease 2'])
+
+                # Verticals
+                for i in range(3):
+                    dist = np.linalg.norm(centers_c2[i] - centers_c1[i])
+                    writer.writerow([f'Vertical {i+1}', f"{dist:.2f}", 'cm', f'Cross-Crease {i+1}'])
+
+            QMessageBox.information(self, "Success", f"Analysis saved to:\n{file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save analysis: {str(e)}")
 
     def generate_pdf_report(self):
         """Generate a comprehensive PDF report with measurements."""

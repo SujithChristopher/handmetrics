@@ -637,9 +637,14 @@ class HandAnnotationWithMeasurements(QMainWindow):
             ref_12 = vertical_mids[1] - vertical_mids[0]
             ref_23 = vertical_mids[2] - vertical_mids[1]
 
+            # Calculate internal angles by choosing appropriate vector directions
+            # IB1_ANG: Angle between Index vertical (V1) and first ref line (Ref12)
             ang1 = get_angle(vertical_vectors[0], ref_12)
+            # MB1_ANG: Angle between Middle vertical (V2) and reversed ref line (-Ref12) to get internal angle > 90
             ang2 = get_angle(vertical_vectors[1], -ref_12) 
+            # MB2_ANG: Angle between Middle vertical (V2) and second ref line (Ref23)
             ang3 = get_angle(vertical_vectors[1], ref_23)
+            # RB2_ANG: Angle between Ring vertical (V3) and reversed ref line (-Ref23) to get internal angle < 90
             ang4 = get_angle(vertical_vectors[2], -ref_23) 
 
             # Display Angles in a box on the plot
@@ -821,6 +826,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 angle = np.degrees(np.arccos(np.clip(dot_product, -1.0, 1.0)))
                 return angle
 
+            # Calculate internal angles for CSV export
+            # We reverse the reference line direction at point P1 and P2 to ensure
+            # we are measuring internal angles as opposed to supplement angles.
             ang1 = calc_angle(Verticals[0], Ref12)
             ang2 = calc_angle(Verticals[1], -Ref12)
             ang3 = calc_angle(Verticals[1], Ref23)
@@ -840,7 +848,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
             with open(file_path, 'w', newline='') as f:
                 writer = csv.writer(f)
                 
-                # Header row
+                # Header row: Mapping geometric values to specific clinical landmark names
+                # MI_LEN and MR_LEN specifically use Crease 2 distances as per user requirement.
+                # C1_SEG_1_2 and C1_SEG_2_3 use Crease 1 distances.
                 header = [
                     'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
                     'C1_SEG_1_2', 'C1_SEG_2_3', 'MI_LEN', 'MR_LEN', 
@@ -848,7 +858,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 ]
                 writer.writerow(header)
                 
-                # Calculate required distances
+                # Calculate required distances (Sequential Euclidean distances between segment centers)
                 dist_c1_seg1 = np.linalg.norm(centers_c1[1] - centers_c1[0]) if len(centers_c1) > 1 else 0
                 dist_c1_seg2 = np.linalg.norm(centers_c1[2] - centers_c1[1]) if len(centers_c1) > 2 else 0
                 dist_c2_seg1 = np.linalg.norm(centers_c2[1] - centers_c2[0]) if len(centers_c2) > 1 else 0

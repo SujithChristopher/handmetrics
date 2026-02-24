@@ -8,6 +8,13 @@ from PySide6.QtCore import Qt, Signal
 from core.measurement import MeasurementCalculator
 
 class ImageCanvas(QFrame):
+    """
+    Custom Widget: Manages the interactive image area.
+    Handles:
+    - AprilTag detection using OpenCV
+    - Landmark point management (adding, removing, clearing)
+    - Real-time drawing of annotations and measurement overlays
+    """
     """Custom widget for displaying image and handling mouse clicks."""
 
     point_added = Signal(tuple)

@@ -1,7 +1,15 @@
 from typing import Optional, Dict
 import numpy as np
 
+# measurement.py: This file contains the core business logic for calculating measurements.
+# It is designed to be independent of any specific UI framework, allowing for
+# flexible integration into different frontends or headless processing.
 class MeasurementCalculator:
+    """
+    Business Logic: Handles camera calibration and pixel-to-metric conversions.
+    Separated from the UI to allow for headless measurement processing or 
+    alternative visualization frontends.
+    """
     """Calculate measurements using AprilTag as reference."""
 
     APRILTAG_SIZE_CM = 7.0  # 7x7 cm marker

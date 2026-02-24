@@ -638,9 +638,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
             ref_23 = vertical_mids[2] - vertical_mids[1]
 
             ang1 = get_angle(vertical_vectors[0], ref_12)
-            ang2 = get_angle(vertical_vectors[1], ref_12) 
+            ang2 = get_angle(vertical_vectors[1], -ref_12) 
             ang3 = get_angle(vertical_vectors[1], ref_23)
-            ang4 = get_angle(vertical_vectors[2], ref_23) 
+            ang4 = get_angle(vertical_vectors[2], -ref_23) 
 
             # Display Angles in a box on the plot
             angle_text = (
@@ -822,9 +822,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 return angle
 
             ang1 = calc_angle(Verticals[0], Ref12)
-            ang2 = calc_angle(Verticals[1], Ref12)
+            ang2 = calc_angle(Verticals[1], -Ref12)
             ang3 = calc_angle(Verticals[1], Ref23)
-            ang4 = calc_angle(Verticals[2], Ref23)
+            ang4 = calc_angle(Verticals[2], -Ref23)
 
             # Calculate C2 segment lengths (individual segment distances, not centers)
             # Segment 1 (Index): p0-p1, Segment 2 (Middle): p2-p3, Segment 3 (Ring): p4-p5

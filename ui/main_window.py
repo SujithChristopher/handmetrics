@@ -372,8 +372,11 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.landmarks_layout.addWidget(header)
 
             # Points
+            finger_names = ['Index', 'Index', 'Middle', 'Middle', 'Ring', 'Ring']
             for idx, (x, y) in enumerate(points):
-                point_label = QLabel(f"  p{idx}: ({x}, {y})")
+                finger = finger_names[idx] if idx < len(finger_names) else f"p{idx}"
+                suffix = "Start" if idx % 2 == 0 else "End"
+                point_label = QLabel(f"  {finger}_{suffix} (p{idx}): ({x}, {y})")
                 point_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[crease]};")
                 self.landmarks_layout.addWidget(point_label)
 
@@ -422,11 +425,12 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 header.setStyleSheet(f"background-color: {colors[crease]}; color: white; padding: 5px; font-weight: bold;")
                 self.measurements_layout.addWidget(header)
 
-                # Distances (sequential: p0→p1, p1→p2, etc.)
-                for dist_info in crease_distances:
-                    dist_text = (f"  p{dist_info['from_point']} → p{dist_info['to_point']}: "
-                                f"{dist_info['cm_distance']:.2f} cm "
-                                f"({dist_info['pixel_distance']:.1f} px)")
+                # Distances (sequential: p0→p1, p2→p3, p4→p5)
+                finger_names = ['Index', 'Middle', 'Ring']
+                for i, dist_info in enumerate(crease_distances):
+                    finger = finger_names[i] if i < len(finger_names) else f"Seg{i+1}"
+                    dist_text = (f"  {finger} (p{dist_info['from_point']}→p{dist_info['to_point']}): "
+                                f"{dist_info['cm_distance']:.2f} cm")
                     dist_label = QLabel(dist_text)
                     dist_label.setStyleSheet(f"padding: 3px; border-left: 3px solid {colors[crease]}; font-family: monospace;")
                     self.measurements_layout.addWidget(dist_label)
@@ -527,10 +531,17 @@ class HandAnnotationWithMeasurements(QMainWindow):
         crease2_segs, crease2_centers = get_segments(crease2_cm)
 
         # Plot crease 1 segments and centers (Cyan - CAD style)
+        c1_dia_labels = ['C1I_DIA', 'C1M_DIA', 'C1R_DIA']
         for i, (p0, p1) in enumerate(crease1_segs):
             ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#00ffff', linewidth=3, alpha=0.8, label=f'C1 Seg{i+1}' if i == 0 else '')
             ax.plot(p0[0], p0[1], 'o', color='#00ffff', markersize=8)
             ax.plot(p1[0], p1[1], 'o', color='#00ffff', markersize=8)
+            
+            # Add segment length label (Diameter)
+            dist = float(np.linalg.norm(p1 - p0))
+            mid = (p0 + p1) / 2
+            ax.text(mid[0] - 0.2, mid[1], f'{c1_dia_labels[i]}: {dist:.2f}', 
+                   ha='right', va='center', fontsize=8, color='#00ffff', rotation=90)
 
         # Plot crease 1 center connections
         if len(crease1_centers) >= 2:
@@ -540,10 +551,17 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 ax.plot(center[0], center[1], 's', color='#00ffff', markersize=10)
 
         # Plot crease 2 segments and centers (Yellow - CAD style)
+        c2_dia_labels = ['C2I_DIA', 'C2M_DIA', 'C2R_DIA']
         for i, (p0, p1) in enumerate(crease2_segs):
             ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color='#ffff00', linewidth=3, alpha=0.8, label=f'C2 Seg{i+1}' if i == 0 else '')
             ax.plot(p0[0], p0[1], 'o', color='#ffff00', markersize=8)
             ax.plot(p1[0], p1[1], 'o', color='#ffff00', markersize=8)
+            
+            # Add segment length label (Diameter)
+            dist = float(np.linalg.norm(p1 - p0))
+            mid = (p0 + p1) / 2
+            ax.text(mid[0] + 0.2, mid[1], f'{c2_dia_labels[i]}: {dist:.2f}', 
+                   ha='left', va='center', fontsize=8, color='#ffff00', rotation=90)
 
         # Plot crease 2 center connections
         if len(crease2_centers) >= 2:
@@ -559,23 +577,14 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 ax.text(center[0], center[1] - 0.3, segment_labels[i],
                        ha='center', fontsize=11, color='#00ffff', weight='bold')
 
-        # Add dimension annotations for Crease 1 (along crease)
-        for i in range(len(crease1_centers) - 1):
-            c1 = crease1_centers[i]
-            c2 = crease1_centers[i + 1]
-            dist = float(np.linalg.norm(c2 - c1))
-            mid = (c1 + c2) / 2
-            ax.text(mid[0], mid[1] + 0.3, f'C1: {dist:.2f} cm',
-                   ha='center', fontsize=9, color='#00ffff', weight='bold',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#00ffff', linewidth=1))
-
         # Add dimension annotations for Crease 2 (along crease)
-        for i in range(len(crease2_centers) - 1):
+        c2_labels = ['MI_LEN', 'MR_LEN']
+        for i in range(min(len(crease2_centers) - 1, 2)):
             c1 = crease2_centers[i]
             c2 = crease2_centers[i + 1]
             dist = float(np.linalg.norm(c2 - c1))
             mid = (c1 + c2) / 2
-            ax.text(mid[0], mid[1] - 0.3, f'C2: {dist:.2f} cm',
+            ax.text(mid[0], mid[1] - 0.3, f'{c2_labels[i]}: {dist:.2f} cm',
                    ha='center', fontsize=9, color='#ffff00', weight='bold',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ffff00', linewidth=1))
 
@@ -600,7 +609,8 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
                 # Offset text based on segment to avoid overlap
                 offset_x = 0.5 if i == 1 else -0.5 if i == 0 else 0.5
-                ax.text(mid[0] + offset_x, mid[1], f'{dist:.2f} cm',
+                v_label = f'V{i+1}_LEN' if i != 1 else 'V2_LEN'
+                ax.text(mid[0] + offset_x, mid[1], f'{v_label}: {dist:.2f} cm',
                        ha='center', fontsize=9, color='#ff00ff', weight='bold',
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ff00ff', linewidth=1))
 
@@ -635,10 +645,10 @@ class HandAnnotationWithMeasurements(QMainWindow):
             # Display Angles in a box on the plot
             angle_text = (
                 f"ANGLES:\n"
-                f"Ang1 (V1/Ref1-2): {ang1:.1f}°\n"
-                f"Ang2 (V2/Ref1-2): {ang2:.1f}°\n"
-                f"Ang3 (V2/Ref2-3): {ang3:.1f}°\n"
-                f"Ang4 (V3/Ref2-3): {ang4:.1f}°"
+                f"IB1_ANG  : {ang1:.1f}°\n"
+                f"MB1_ANG  : {ang2:.1f}°\n"
+                f"MB2_ANG  : {ang3:.1f}°\n"
+                f"RB2_ANG  : {ang4:.1f}°"
             )
             ax.text(0.02, 0.98, angle_text, transform=ax.transAxes,
                     fontsize=9, color='white', verticalalignment='top', family='monospace',
@@ -833,7 +843,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 # Header row
                 header = [
                     'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
-                    'MI_LEN', 'C1_SEG_2_3', 'C2_SEG_1_2', 'MR_LEN', 
+                    'C1_SEG_1_2', 'C1_SEG_2_3', 'MI_LEN', 'MR_LEN', 
                     'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA'
                 ]
                 writer.writerow(header)

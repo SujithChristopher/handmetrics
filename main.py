@@ -1171,9 +1171,11 @@ class HandAnnotationWithMeasurements(QMainWindow):
             ref_23 = vertical_mids[2] - vertical_mids[1]
 
             ang1 = get_angle(vertical_vectors[0], ref_12)
-            ang2 = 180 - get_angle(vertical_vectors[1], ref_12) 
+            # ang2 = 180 - get_angle(vertical_vectors[1], ref_12) 
+            ang2 = get_angle(vertical_vectors[1], ref_12) 
             ang3 = get_angle(vertical_vectors[1], ref_23)
-            ang4 = 180 - get_angle(vertical_vectors[2], ref_23) 
+            # ang4 = 180 - get_angle(vertical_vectors[2], ref_23) 
+            ang4 = get_angle(vertical_vectors[2], ref_23) 
 
             # Display Angles in a box on the plot
             angle_text = (
@@ -1370,45 +1372,44 @@ class HandAnnotationWithMeasurements(QMainWindow):
                     seg_length = np.linalg.norm(p2 - p1)
                     c2_seg_lengths.append(seg_length)
 
-            # Write to CSV
+                # Write to CSV in column-wise format
             with open(file_path, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Metric', 'Value', 'Unit', 'Description'])
-                writer.writerow(['IB1_ANG', f"{ang1:.2f}", 'degrees', 'Vertical 1 (Index) vs Line 1-2'])
-                writer.writerow(['MB1_ANG', f"{ang2:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 1-2'])
-                writer.writerow(['MB2_ANG', f"{ang3:.2f}", 'degrees', 'Vertical 2 (Middle) vs Line 2-3'])
-                writer.writerow(['RB2_ANG', f"{ang4:.2f}", 'degrees', 'Vertical 3 (Ring) vs Line 2-3'])
-
-                # Add distances for context
-                writer.writerow([])
-                writer.writerow(['Segment Distances', '', '', ''])
-                # C1 Segments - using renamed columns for relevant segments
+                
+                # Header row
+                header = [
+                    'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
+                    'MI_LEN', 'C1_SEG_2_3', 'C2_SEG_1_2', 'MR_LEN', 
+                    'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA'
+                ]
+                writer.writerow(header)
+                
+                # Calculate required distances
                 dist_c1_seg1 = np.linalg.norm(centers_c1[1] - centers_c1[0]) if len(centers_c1) > 1 else 0
                 dist_c1_seg2 = np.linalg.norm(centers_c1[2] - centers_c1[1]) if len(centers_c1) > 2 else 0
-                writer.writerow(['MI_LEN', f"{dist_c1_seg1:.2f}", 'cm', 'Between Crease 1 segments (Index-Middle)'])
-                writer.writerow(['C1 Seg 2-3', f"{dist_c1_seg2:.2f}", 'cm', 'Along Crease 1'])
-
-                # C2 Segments - using renamed column for relevant segment
                 dist_c2_seg1 = np.linalg.norm(centers_c2[1] - centers_c2[0]) if len(centers_c2) > 1 else 0
                 dist_c2_seg2 = np.linalg.norm(centers_c2[2] - centers_c2[1]) if len(centers_c2) > 2 else 0
-                writer.writerow(['C2 Seg 1-2', f"{dist_c2_seg1:.2f}", 'cm', 'Along Crease 2'])
-                writer.writerow(['MR_LEN', f"{dist_c2_seg2:.2f}", 'cm', 'Between Crease 2 segments (Middle-Ring)'])
-
-                # Verticals
-                dist_v1 = np.linalg.norm(centers_c2[0] - centers_c1[0])
                 dist_v2 = np.linalg.norm(centers_c2[1] - centers_c1[1])
-                dist_v3 = np.linalg.norm(centers_c2[2] - centers_c1[2])
-                writer.writerow(['Vertical 1', f"{dist_v1:.2f}", 'cm', 'Cross-Crease 1 (Index)'])
-                writer.writerow(['V2_LEN', f"{dist_v2:.2f}", 'cm', 'Cross-Crease 2 (Middle)'])
-                writer.writerow(['Vertical 3', f"{dist_v3:.2f}", 'cm', 'Cross-Crease 3 (Ring)'])
-
-                # Crease 2 segment lengths
-                writer.writerow([])
-                writer.writerow(['Crease 2 Segment Lengths', '', '', ''])
+                
+                # Prepare data row
+                data_row = [
+                    f"{ang1:.2f}", f"{ang2:.2f}", f"{ang3:.2f}", f"{ang4:.2f}",
+                    f"{dist_c1_seg1:.2f}", f"{dist_c1_seg2:.2f}", 
+                    f"{dist_c2_seg1:.2f}", f"{dist_c2_seg2:.2f}",
+                    f"{dist_v2:.2f}"
+                ]
+                
+                # Add C2 segment lengths
                 if len(c2_seg_lengths) >= 3:
-                    writer.writerow(['C2I_DIA', f"{c2_seg_lengths[0]:.2f}", 'cm', 'Crease 2 Index finger segment length'])
-                    writer.writerow(['C2M_DIA', f"{c2_seg_lengths[1]:.2f}", 'cm', 'Crease 2 Middle finger segment length'])
-                    writer.writerow(['C2R_DIA', f"{c2_seg_lengths[2]:.2f}", 'cm', 'Crease 2 Ring finger segment length'])
+                    data_row.extend([
+                        f"{c2_seg_lengths[0]:.2f}", 
+                        f"{c2_seg_lengths[1]:.2f}", 
+                        f"{c2_seg_lengths[2]:.2f}"
+                    ])
+                else:
+                    data_row.extend(['0.00', '0.00', '0.00'])
+                    
+                writer.writerow(data_row)
 
             QMessageBox.information(self, "Success", f"Analysis saved to:\n{file_path}")
 

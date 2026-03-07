@@ -9,7 +9,7 @@ import numpy as np
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QGroupBox, QScrollArea,
-    QFileDialog, QMessageBox, QFrame, QTabWidget
+    QFileDialog, QMessageBox, QFrame, QTabWidget, QLineEdit
 )
 from PySide6.QtGui import QImage, QPixmap, QColor, QFont, QPainter, QPen, QBrush
 from PySide6.QtCore import Qt, QPoint, QSize, Signal
@@ -175,6 +175,26 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.scale_value = QLabel("")
         self.scale_value.setStyleSheet("font-size: 10px; color: #2196F3; padding: 4px;")
         layout.addWidget(self.scale_value)
+
+        # Editable AprilTag Size
+        apriltag_size_label = QLabel("AprilTag Size (m):")
+        apriltag_size_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF; margin-top: 5px;")
+        layout.addWidget(apriltag_size_label)
+        
+        size_layout = QHBoxLayout()
+        self.apriltag_size_input = QLineEdit("0.07")
+        self.apriltag_size_input.setStyleSheet("font-size: 11px; padding: 5px; border-radius: 3px; background-color: white; color: black;")
+        self.apriltag_size_input.setMinimumHeight(28)
+        
+        # Free-text parsing to avoid QDoubleValidator intermediate state lockouts
+        self.apriltag_size_input.textChanged.connect(self.on_apriltag_size_changed)
+        
+        size_layout.addWidget(self.apriltag_size_input)
+        
+        size_info = QLabel("(= 7 cm)")
+        size_info.setStyleSheet("font-size: 10px; color: #aaaaaa; font-style: italic;")
+        size_layout.addWidget(size_info)
+        layout.addLayout(size_layout)
 
         # Toggle measurements display
         self.toggle_measurements = QPushButton("Show Measurements")
@@ -387,6 +407,34 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.scale_status.setText("No scale")
             self.scale_status.setStyleSheet("color: gray; font-weight: bold;")
             self.toggle_measurements.setEnabled(False)
+
+    def on_apriltag_size_changed(self, text: str):
+        """Handle user changing the AprilTag physical dimension."""
+        print(f"DEBUG: AprilTag size changed string: '{text}'")
+        if not text:
+            # Revert to default or do nothing until they type something valid
+            return
+            
+        try:
+            # Handle comma instead of dot for different locales
+            clean_text = text.replace(',', '.')
+            size_m = float(clean_text)
+            print(f"DEBUG: Parsed size_m = {size_m}")
+            if size_m > 0:
+                # Update measurement calculator
+                success = self.canvas.measurement_calc.set_apriltag_size(size_m)
+                print(f"DEBUG: set_apriltag_size({size_m}) returned {success}")
+                
+                # If we successfully recalculated (meaning we already have avg_pixels)
+                if success:
+                    scale_info = self.canvas.measurement_calc.get_scale_info()
+                    self.on_scale_calibrated(scale_info)
+                    self.canvas.update()  # Redraw canvas text
+                    self.update_measurements_display() # Redraw sidebar text
+                    if self.view_mode == "plot":
+                        self.update_geometric_plot() # Recalibrate chart
+        except ValueError:
+            pass
 
     def toggle_measurements_display(self):
         """Toggle measurement display on image."""

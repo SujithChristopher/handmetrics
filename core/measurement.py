@@ -12,11 +12,26 @@ class MeasurementCalculator:
     """
     """Calculate measurements using AprilTag as reference."""
 
-    APRILTAG_SIZE_CM = 7.0  # 7x7 cm marker
-
     def __init__(self):
+        self.apriltag_size_m = 0.07  # Default 0.07 meters (7cm)
+        self.apriltag_size_cm = 7.0
         self.pixels_per_cm: Optional[float] = None
+        self.avg_pixels: Optional[float] = None
         self.scale_calibrated = False
+
+    def set_apriltag_size(self, size_m: float) -> bool:
+        """Update AprilTag physical size and recalculate conversion if calibrated."""
+        if size_m <= 0:
+            return False
+            
+        self.apriltag_size_m = size_m
+        self.apriltag_size_cm = size_m * 100.0
+        
+        # Recalculate if we already have pixel measurements
+        if self.avg_pixels is not None:
+            self.pixels_per_cm = self.avg_pixels / self.apriltag_size_cm
+            return True
+        return False
 
     def calibrate_from_apriltag(self, corners: np.ndarray) -> bool:
         """
@@ -37,11 +52,10 @@ class MeasurementCalculator:
                 distances.append(dist)
 
             # Average edge length in pixels
-            avg_pixels = np.mean(distances)
+            self.avg_pixels = np.mean(distances)
 
             # Calculate pixels per cm
-            # AprilTag is 7x7 cm, so edge is 7 cm
-            self.pixels_per_cm = avg_pixels / self.APRILTAG_SIZE_CM
+            self.pixels_per_cm = self.avg_pixels / self.apriltag_size_cm
             self.scale_calibrated = True
 
             return True
@@ -60,5 +74,6 @@ class MeasurementCalculator:
         return {
             'calibrated': self.scale_calibrated,
             'pixels_per_cm': self.pixels_per_cm,
-            'apriltag_size_cm': self.APRILTAG_SIZE_CM
+            'apriltag_size_cm': self.apriltag_size_cm,
+            'apriltag_size_m': self.apriltag_size_m
         }

@@ -93,6 +93,22 @@ class HandAnnotationWithMeasurements(QMainWindow):
         layout.addWidget(self.view_toggle_btn)
 
         layout.addSpacing(10)
+        
+        # Rotation Controls
+        rotation_layout = QHBoxLayout()
+        rot_left_btn = QPushButton("⟲ Rot -90°")
+        rot_left_btn.setStyleSheet("background-color: #FFC107; color: black; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        rot_left_btn.clicked.connect(lambda: self.rotate_image(clockwise=False))
+        rotation_layout.addWidget(rot_left_btn)
+        
+        rot_right_btn = QPushButton("⟳ Rot +90°")
+        rot_right_btn.setStyleSheet("background-color: #FFC107; color: black; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        rot_right_btn.clicked.connect(lambda: self.rotate_image(clockwise=True))
+        rotation_layout.addWidget(rot_right_btn)
+        
+        layout.addLayout(rotation_layout)
+
+        layout.addSpacing(10)
 
         # Crease Selection
         crease_label = QLabel("Select Crease:")
@@ -297,6 +313,12 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 self.update_measurements_display()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load image: {str(e)}")
+
+    def rotate_image(self, clockwise: bool):
+        """Rotate image and update display."""
+        self.canvas.rotate_image(clockwise)
+        self.update_landmarks_display()
+        self.update_measurements_display()
 
     def on_crease_selected(self, crease_text: str):
         """Handle crease selection."""

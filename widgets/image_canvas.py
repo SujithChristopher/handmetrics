@@ -124,6 +124,41 @@ class ImageCanvas(QFrame):
         except Exception as e:
             print(f"AprilTag detection error: {e}")
 
+    def rotate_image(self, clockwise: bool = True):
+        """Rotate image by 90 degrees (+90 if clockwise, -90 if counter-clockwise)."""
+        if self.image is None:
+            return
+
+        h, w = self.image.shape[:2]
+
+        # Rotate the numpy array
+        if clockwise:
+            self.image = cv2.rotate(self.image, cv2.ROTATE_90_CLOCKWISE)
+            # Math: (x, y) -> (H - 1 - y, x)
+            for crease, points in self.selected_points.items():
+                new_points = []
+                for x, y in points:
+                    new_points.append((h - 1 - y, x))
+                self.selected_points[crease] = new_points
+        else:
+            self.image = cv2.rotate(self.image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            # Math: (x, y) -> (y, W - 1 - x)
+            for crease, points in self.selected_points.items():
+                new_points = []
+                for x, y in points:
+                    new_points.append((y, w - 1 - x))
+                self.selected_points[crease] = new_points
+
+        # Re-detect AprilTags because their coordinate spaces have changed
+        self.detect_apriltags()
+
+        # Reset zoom/pan so they don't get disorienting
+        self.zoom_factor = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+
+        self.update()
+
     def set_current_crease(self, crease: str):
         """Set the current crease for annotation."""
         self.current_crease = crease

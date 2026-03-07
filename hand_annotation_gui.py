@@ -60,7 +60,7 @@ class ImageCanvas(QFrame):
             # Note: OpenCV 4.7+ has built-in apriltag support
             try:
                 detector_params = cv2.aruco.DetectorParameters()
-                detector_params.adaptiveThreshConstant = 10
+                # detector_params.adaptiveThreshConstant = 10
                 detector = cv2.aruco.ArucoDetector(
                     cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11),
                     detector_params

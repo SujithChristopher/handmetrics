@@ -5,7 +5,7 @@ import pillow_heif
 from PIL import Image
 from PySide6.QtWidgets import QFrame, QMessageBox
 from PySide6.QtGui import QImage, QPixmap, QPainter
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QRect
 
 from core.measurement import MeasurementCalculator
 
@@ -41,6 +41,17 @@ class ImageCanvas(QFrame):
         # Measurement calculator
         self.measurement_calc = MeasurementCalculator()
         self.show_measurements = False
+        
+        # Display state
+        self.image_rect = QRect()  # The actual rectangle where the image is drawn
+        self.scale_factor = 1.0    # Current scale factor (pixels to display units)
+        
+        # Zoom and Pan state
+        self.zoom_factor = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        self.is_panning = False
+        self.last_pan_pos = None
 
     def set_image(self, image_path):
         """Load and display image."""
@@ -81,7 +92,7 @@ class ImageCanvas(QFrame):
 
             try:
                 detector_params = cv2.aruco.DetectorParameters()
-                detector_params.adaptiveThreshConstant = 10
+                # detector_params.adaptiveThreshConstant = 10
                 detector = cv2.aruco.ArucoDetector(
                     cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11),
                     detector_params
@@ -117,22 +128,81 @@ class ImageCanvas(QFrame):
         """Set the current crease for annotation."""
         self.current_crease = crease
 
+    def wheelEvent(self, event):
+        """Handle mouse wheel for zooming."""
+        if event.modifiers() & Qt.ControlModifier:
+            old_zoom = self.zoom_factor
+            
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.zoom_factor *= 1.1
+            elif delta < 0:
+                self.zoom_factor /= 1.1
+                
+            self.zoom_factor = max(1.0, min(50.0, self.zoom_factor))
+            
+            if self.zoom_factor == 1.0:
+                self.pan_x = 0.0
+                self.pan_y = 0.0
+            elif self.image is not None and old_zoom != self.zoom_factor and not self.image_rect.isEmpty():
+                # Zoom-to-cursor logic
+                mouse_pos = event.position()
+                mouse_x = mouse_pos.x()
+                mouse_y = mouse_pos.y()
+                
+                # Image coordinates corresponding to the mouse
+                img_x = (mouse_x - self.image_rect.x()) / self.scale_factor
+                img_y = (mouse_y - self.image_rect.y()) / self.scale_factor
+                
+                widget_w = self.width() - 4
+                widget_h = self.height() - 4
+                h, w = self.image.shape[:2]
+                
+                base_scale = min(widget_w / w, widget_h / h)
+                new_scale = base_scale * self.zoom_factor
+                
+                target_w = w * new_scale
+                target_h = h * new_scale
+                
+                self.pan_x = mouse_x - img_x * new_scale - (widget_w - target_w) / 2.0 - 2.0
+                self.pan_y = mouse_y - img_y * new_scale - (widget_h - target_h) / 2.0 - 2.0
+                
+            self.update()
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
     def mousePressEvent(self, event):
-        """Handle mouse click to add points."""
+        """Handle mouse click to add points or start panning."""
+        if event.button() in (Qt.RightButton, Qt.MiddleButton):
+            self.is_panning = True
+            self.last_pan_pos = event.position()
+            self.setCursor(Qt.ClosedHandCursor)
+            event.accept()
+            return
+
         if self.image is None or self.current_crease is None:
             QMessageBox.warning(self, "Warning", "Please load an image and select a crease first.")
             return
 
-        # Get click position relative to the image
+        # Get click position relative to the widget
         canvas_pos = event.position()
-        x, y = int(canvas_pos.x()), int(canvas_pos.y())
+        click_x, click_y = canvas_pos.x(), canvas_pos.y()
 
-        # Scale back to original image coordinates
-        if hasattr(self, 'display_image'):
-            scale_x = self.image.shape[1] / self.display_image.width()
-            scale_y = self.image.shape[0] / self.display_image.height()
-            x = int(x * scale_x)
-            y = int(y * scale_y)
+        # Check if click is inside the image rectangle
+        if not self.image_rect.contains(int(click_x), int(click_y)):
+            return
+
+        # Map click coordinates to original image coordinates
+        # 1. Translate to image origin
+        rel_x = click_x - self.image_rect.x()
+        rel_y = click_y - self.image_rect.y()
+        
+        # 2. Scale back to original resolution
+        # scale_factor = displayed_size / original_size
+        # original_pos = rel_pos / scale_factor
+        x = int(rel_x / self.scale_factor)
+        y = int(rel_y / self.scale_factor)
 
         # Validate click position
         if x < 0 or y < 0 or x >= self.image.shape[1] or y >= self.image.shape[0]:
@@ -142,6 +212,29 @@ class ImageCanvas(QFrame):
         self.selected_points[self.current_crease].append((x, y))
         self.point_added.emit((self.current_crease, len(self.selected_points[self.current_crease]) - 1, (x, y)))
         self.update()
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse drag for panning."""
+        if self.is_panning and self.last_pan_pos is not None:
+            delta = event.position() - self.last_pan_pos
+            self.pan_x += delta.x()
+            self.pan_y += delta.y()
+            self.last_pan_pos = event.position()
+            self.update()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Handle end of panning."""
+        if self.is_panning:
+            if event.button() in (Qt.RightButton, Qt.MiddleButton):
+                self.is_panning = False
+                self.last_pan_pos = None
+                self.unsetCursor()
+                event.accept()
+                return
+        super().mouseReleaseEvent(event)
 
     def calculate_joint_distances(self) -> Dict[str, List[Dict]]:
         """Calculate distances only for pairs (p0-p1, p2-p3, p4-p5, etc.).
@@ -234,12 +327,28 @@ class ImageCanvas(QFrame):
         bytes_per_line = ch * w
         qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
 
-        # Scale to fit widget
-        scaled_pixmap = QPixmap.fromImage(qt_image).scaledToWidth(self.width() - 4, Qt.SmoothTransformation)
-        self.display_image = scaled_pixmap
-
+        # Base scale to fit widget
+        widget_w = self.width() - 4
+        widget_h = self.height() - 4
+        
+        base_scale = min(widget_w / w, widget_h / h)
+        total_scale = base_scale * self.zoom_factor
+        
+        target_w = int(w * total_scale)
+        target_h = int(h * total_scale)
+        
+        # Calculate centering and pan offsets
+        offset_x = int((widget_w - target_w) / 2.0 + 2.0 + self.pan_x)
+        offset_y = int((widget_h - target_h) / 2.0 + 2.0 + self.pan_y)
+        
+        # Store for coordinate mapping
+        self.image_rect = QRect(offset_x, offset_y, target_w, target_h)
+        self.scale_factor = total_scale
+        
+        full_pixmap = QPixmap.fromImage(qt_image)
         painter = QPainter(self)
-        painter.drawPixmap(2, 2, scaled_pixmap)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap(self.image_rect, full_pixmap)
 
     def undo_last_point(self):
         """Remove the last added point."""

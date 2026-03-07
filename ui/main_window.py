@@ -43,6 +43,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.canvas.point_added.connect(self.on_point_added)
         self.canvas.apriltag_detected.connect(self.on_apriltag_detected)
         self.canvas.scale_calibrated.connect(self.on_scale_calibrated)
+        self.canvas.hand_detected.connect(self.on_hand_detected)
 
         # Center - Geometric plot canvas
         self.figure = Figure(figsize=(10, 10))
@@ -257,6 +258,13 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.apriltag_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; max-height: 50px; border-radius: 3px; font-size: 10px;")
         landmarks_layout.addWidget(self.apriltag_label)
 
+        hand_title = QLabel("Detected Hand:")
+        hand_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490; margin-top: 8px;")
+        landmarks_layout.addWidget(hand_title)
+        self.hand_label = QLabel("Unknown")
+        self.hand_label.setStyleSheet("background-color: #e0f7fa; color: #006064; font-weight: bold; font-size: 11px; padding: 6px; border-radius: 3px;")
+        landmarks_layout.addWidget(self.hand_label)
+
         landmarks_header = QLabel("Hand Landmarks:")
         landmarks_header.setStyleSheet("font-size: 11px; font-weight: bold; color: #1a5490; margin-top: 8px;")
         landmarks_layout.addWidget(landmarks_header)
@@ -351,6 +359,14 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.apriltag_label.setText(tag_text)
         else:
             self.apriltag_label.setText("No AprilTags detected")
+
+    def on_hand_detected(self, hand_side: str):
+        """Update the detected hand label."""
+        self.hand_label.setText(hand_side)
+        if hand_side == "Unknown":
+            self.hand_label.setStyleSheet("background-color: #ffe0b2; color: #e65100; font-weight: bold; font-size: 11px; padding: 6px; border-radius: 3px;")
+        else:
+            self.hand_label.setStyleSheet("background-color: #c8e6c9; color: #1b5e20; font-weight: bold; font-size: 11px; padding: 6px; border-radius: 3px;")
 
     def on_scale_calibrated(self, scale_info):
         """Handle scale calibration."""
@@ -901,7 +917,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 header = [
                     'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
                     'C1_SEG_1_2', 'C1_SEG_2_3', 'MI_LEN', 'MR_LEN', 
-                    'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA'
+                    'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA', 'HAND'
                 ]
                 writer.writerow(header)
                 
@@ -929,6 +945,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
                     ])
                 else:
                     data_row.extend(['0.00', '0.00', '0.00'])
+                    
+                # Add Hand Type
+                data_row.append(self.canvas.detected_hand)
                     
                 writer.writerow(data_row)
 

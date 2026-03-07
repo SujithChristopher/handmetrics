@@ -4,10 +4,11 @@ from typing import Dict, List, Tuple, Optional
 import pillow_heif
 from PIL import Image
 from PySide6.QtWidgets import QFrame, QMessageBox
-from PySide6.QtGui import QImage, QPixmap, QPainter
 from PySide6.QtCore import Qt, Signal, QRect
 
 from core.measurement import MeasurementCalculator
+from core.hand_detector import HandDetector
+from core.hand_detector import HandDetector
 
 class ImageCanvas(QFrame):
     """
@@ -22,6 +23,7 @@ class ImageCanvas(QFrame):
     point_added = Signal(tuple)
     apriltag_detected = Signal(list)
     scale_calibrated = Signal(dict)
+    hand_detected = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -40,6 +42,8 @@ class ImageCanvas(QFrame):
 
         # Measurement calculator
         self.measurement_calc = MeasurementCalculator()
+        self.hand_detector = HandDetector()
+        self.detected_hand = "Unknown"
         self.show_measurements = False
         
         # Display state
@@ -77,6 +81,11 @@ class ImageCanvas(QFrame):
 
         if self.image is None:
             raise ValueError(f"Cannot load image: {image_path}")
+            
+        # Detect Hand Side (Send RGB image to detector)
+        rgb_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
+        self.detected_hand = self.hand_detector.detect_hand_side(rgb_image)
+        self.hand_detected.emit(self.detected_hand)
 
         # Detect AprilTags
         self.detect_apriltags()

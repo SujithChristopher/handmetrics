@@ -184,6 +184,14 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.toggle_measurements.clicked.connect(self.toggle_measurements_display)
         layout.addWidget(self.toggle_measurements)
 
+        # Toggle MP plots display
+        self.toggle_mp_plots = QPushButton("Show Hand Tracking")
+        self.toggle_mp_plots.setCheckable(True)
+        self.toggle_mp_plots.setStyleSheet("background-color: #d0d0d0; color: #000000; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        self.toggle_mp_plots.setMinimumHeight(32)
+        self.toggle_mp_plots.clicked.connect(self.toggle_mp_plots_display)
+        layout.addWidget(self.toggle_mp_plots)
+
         # Action buttons
         layout.addSpacing(15)
 
@@ -387,6 +395,15 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.toggle_measurements.setStyleSheet("background-color: #00cc00; color: white;")
         else:
             self.toggle_measurements.setStyleSheet("background-color: #cccccc;")
+        self.canvas.update()
+
+    def toggle_mp_plots_display(self):
+        """Toggle mediapipe plots display on image."""
+        self.canvas.show_mediapipe_plots = self.toggle_mp_plots.isChecked()
+        if self.canvas.show_mediapipe_plots:
+            self.toggle_mp_plots.setStyleSheet("background-color: #0099ff; color: white;")
+        else:
+            self.toggle_mp_plots.setStyleSheet("background-color: #d0d0d0; color: #000000;")
         self.canvas.update()
 
     def update_point_counter(self):

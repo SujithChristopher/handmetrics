@@ -39,14 +39,14 @@ class HandDetector:
         except Exception as e:
             print(f"Failed to initialize HandLandmarker: {e}")
 
-    def detect_hand_side(self, bgr_image: np.ndarray) -> str:
+    def detect_hand_side(self, bgr_image: np.ndarray) -> tuple[str, list]:
         """
-        Detects whether the image contains a Left or Right hand.
+        Detects whether the image contains a Left or Right hand and returns landmarks.
         Expects a BGR image array.
-        Returns: 'Left', 'Right', or 'Unknown'
+        Returns: ('Left' or 'Right' or 'Unknown', list of landmarks)
         """
         if bgr_image is None or self.landmarker is None:
-            return "Unknown"
+            return "Unknown", []
 
         try:
             # MediaPipe expects RGB images
@@ -59,9 +59,10 @@ class HandDetector:
                 # MediaPipe Tasks API returns 'Left' or 'Right'
                 # Note: HandLandmarker correctly models physical hands
                 handedness = detection_result.handedness[0][0].category_name
-                return handedness
+                landmarks = detection_result.hand_landmarks[0] if detection_result.hand_landmarks else []
+                return handedness, landmarks
                 
-            return "Unknown"
+            return "Unknown", []
         except Exception as e:
             print(f"Error in hand detection: {e}")
-            return "Unknown"
+            return "Unknown", []

@@ -4,10 +4,10 @@ from typing import Dict, List, Tuple, Optional
 import pillow_heif
 from PIL import Image
 from PySide6.QtWidgets import QFrame, QMessageBox
+from PySide6.QtGui import QImage, QPixmap, QPainter
 from PySide6.QtCore import Qt, Signal, QRect
 
 from core.measurement import MeasurementCalculator
-from core.hand_detector import HandDetector
 from core.hand_detector import HandDetector
 
 class ImageCanvas(QFrame):
@@ -44,6 +44,8 @@ class ImageCanvas(QFrame):
         self.measurement_calc = MeasurementCalculator()
         self.hand_detector = HandDetector()
         self.detected_hand = "Unknown"
+        self.mp_landmarks = []
+        self.show_mediapipe_plots = False
         self.show_measurements = False
         
         # Display state
@@ -84,7 +86,7 @@ class ImageCanvas(QFrame):
             
         # Detect Hand Side (Send RGB image to detector)
         rgb_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
-        self.detected_hand = self.hand_detector.detect_hand_side(rgb_image)
+        self.detected_hand, self.mp_landmarks = self.hand_detector.detect_hand_side(rgb_image)
         self.hand_detected.emit(self.detected_hand)
 
         # Detect AprilTags
@@ -364,6 +366,27 @@ class ImageCanvas(QFrame):
                             text = f"{cm_dist:.1f}cm"
                             cv2.putText(display_image, text, (mid_x, mid_y - 5),
                                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+
+        # Draw MediaPipe hand landmarks if toggled
+        if self.show_mediapipe_plots and self.mp_landmarks:
+            h, w = display_image.shape[:2]
+            mp_connections = [
+                (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
+                (0, 5), (5, 6), (6, 7), (7, 8),  # Index
+                (5, 9), (9, 10), (10, 11), (11, 12),  # Middle
+                (9, 13), (13, 14), (14, 15), (15, 16),  # Ring
+                (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)  # Pinky
+            ]
+            
+            points_px = []
+            for lm in self.mp_landmarks:
+                px, py = int(lm.x * w), int(lm.y * h)
+                points_px.append((px, py))
+                cv2.circle(display_image, (px, py), 4, (0, 255, 255), -1)  # Yellow dots
+            
+            for start_idx, end_idx in mp_connections:
+                if start_idx < len(points_px) and end_idx < len(points_px):
+                    cv2.line(display_image, points_px[start_idx], points_px[end_idx], (0, 165, 255), 2)  # Orange lines
 
         # Convert to QPixmap
         rgb_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)

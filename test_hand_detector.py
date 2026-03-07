@@ -14,7 +14,7 @@ def test_hand_detector():
     # Create a dummy blank image (MediaPipe won't find a hand here)
     dummy_image = np.zeros((400, 400, 3), dtype=np.uint8)
     
-    result = detector.detect_hand_side(dummy_image)
+    result, _ = detector.detect_hand_side(dummy_image)
     print(f"Blank image detection: {result}")
     assert result == "Unknown"
     

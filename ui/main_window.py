@@ -101,7 +101,32 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.crease_combo = QComboBox()
         self.crease_combo.addItems(["Crease 1", "Crease 2", "Crease 3"])
         self.crease_combo.setCurrentIndex(-1)  # Start with no selection
-        self.crease_combo.setStyleSheet("font-size: 11px; padding: 5px; border-radius: 3px; border: 1px solid #bbb;")
+        self.crease_combo.setStyleSheet("""
+            QComboBox {
+                font-size: 11px;
+                padding: 5px;
+                border-radius: 4px;
+                border: 1px solid #777;
+                background-color: white;
+                color: #333;
+            }
+            QComboBox:hover {
+                border: 1px solid #2196F3;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #777;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #333;
+                width: 0;
+                height: 0;
+                margin-right: 5px;
+            }
+        """)
         self.crease_combo.setMinimumHeight(32)
         self.crease_combo.currentTextChanged.connect(self.on_crease_selected)
         layout.addWidget(self.crease_combo)
@@ -262,7 +287,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         """Load image from file."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Image", "images",
-            "Image Files (*.jpg *.jpeg *.png *.bmp)"
+            "Image Files (*.jpg *.jpeg *.png *.bmp *.heic *.HEIC)"
         )
         if file_path:
             try:

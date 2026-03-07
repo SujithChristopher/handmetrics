@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from typing import Dict, List, Tuple, Optional
+import pillow_heif
+from PIL import Image
 from PySide6.QtWidgets import QFrame, QMessageBox
 from PySide6.QtGui import QImage, QPixmap, QPainter
 from PySide6.QtCore import Qt, Signal
@@ -43,7 +45,24 @@ class ImageCanvas(QFrame):
     def set_image(self, image_path):
         """Load and display image."""
         self.image_path = image_path
-        self.image = cv2.imread(str(image_path))
+        path_str = str(image_path)
+        
+        if path_str.lower().endswith(('.heic', '.heif')):
+            try:
+                heif_file = pillow_heif.read_heif(path_str)
+                image = Image.frombytes(
+                    heif_file.mode,
+                    heif_file.size,
+                    heif_file.data,
+                    "raw",
+                )
+                # Convert PIL image to BGR numpy array for OpenCV
+                self.image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            except Exception as e:
+                print(f"Error loading HEIC image: {e}")
+                self.image = None
+        else:
+            self.image = cv2.imread(path_str)
 
         if self.image is None:
             raise ValueError(f"Cannot load image: {image_path}")

@@ -129,7 +129,7 @@ class ImageCanvas(QFrame):
                         if self.measurement_calc.calibrate_from_apriltag(corner[0]):
                             scale_info = self.measurement_calc.get_scale_info()
                             self.scale_calibrated.emit(scale_info)
-                            print(f"✓ Scale calibrated: {scale_info['pixels_per_cm']:.4f} pixels/cm")
+                            print(f"✓ Homography calibrated from AprilTag (approx {scale_info['pixels_per_cm']:.2f} px/cm)")
 
             self.apriltag_detected.emit(self.detected_tags)
         except Exception as e:
@@ -298,7 +298,10 @@ class ImageCanvas(QFrame):
                         p2 = np.array(points[i + 1])
 
                         pixel_dist = float(np.linalg.norm(p2 - p1))
-                        cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                        cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                            float(p1[0]), float(p1[1]),
+                            float(p2[0]), float(p2[1]),
+                        )
 
                         distance_info = {
                             'from_point': i,
@@ -357,7 +360,10 @@ class ImageCanvas(QFrame):
                             p1 = np.array(points[i])
                             p2 = np.array(points[i+1])
                             pixel_dist = float(np.linalg.norm(p2 - p1))
-                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                                float(p1[0]), float(p1[1]),
+                                float(p2[0]), float(p2[1]),
+                            )
 
                             # Midpoint for text
                             mid_x = int((points[i][0] + points[i+1][0]) / 2)
@@ -485,7 +491,10 @@ class ImageCanvas(QFrame):
                             p1 = np.array(points[i])
                             p2 = np.array(points[i+1])
                             pixel_dist = float(np.linalg.norm(p2 - p1))
-                            cm_dist = self.measurement_calc.pixel_distance_to_cm(pixel_dist)
+                            cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                                float(p1[0]), float(p1[1]),
+                                float(p2[0]), float(p2[1]),
+                            )
 
                             # Midpoint for text
                             mid_x = int((points[i][0] + points[i+1][0]) / 2)

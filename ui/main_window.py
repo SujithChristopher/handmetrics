@@ -9,7 +9,7 @@ import numpy as np
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QGroupBox, QScrollArea,
-    QFileDialog, QMessageBox, QFrame, QTabWidget, QLineEdit
+    QFileDialog, QMessageBox, QFrame, QTabWidget, QLineEdit, QSpinBox
 )
 from PySide6.QtGui import QImage, QPixmap, QColor, QFont, QPainter, QPen, QBrush
 from PySide6.QtCore import Qt, QPoint, QSize, Signal
@@ -195,6 +195,31 @@ class HandAnnotationWithMeasurements(QMainWindow):
         size_info.setStyleSheet("font-size: 10px; color: #aaaaaa; font-style: italic;")
         size_layout.addWidget(size_info)
         layout.addLayout(size_layout)
+
+        # Elevation Angle (metadata only — saved to CSV as ELV_ANG)
+        elv_label = QLabel("Elevation Angle (°):")
+        elv_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFFFFF; margin-top: 5px;")
+        layout.addWidget(elv_label)
+
+        elv_layout = QHBoxLayout()
+        self.elv_ang_input = QSpinBox()
+        self.elv_ang_input.setRange(0, 40)
+        self.elv_ang_input.setValue(0)
+        self.elv_ang_input.setSuffix(" °")
+        self.elv_ang_input.setStyleSheet(
+            "font-size: 11px; padding: 4px; border-radius: 3px; "
+            "background-color: white; color: black;"
+        )
+        self.elv_ang_input.setMinimumHeight(28)
+        self.elv_ang_input.setToolTip(
+            "Camera elevation angle (0–40°). Saved to CSV as ELV_ANG — "
+            "metadata only, not used in calculations."
+        )
+        elv_layout.addWidget(self.elv_ang_input)
+        elv_info = QLabel("(metadata)")
+        elv_info.setStyleSheet("font-size: 10px; color: #aaaaaa; font-style: italic;")
+        elv_layout.addWidget(elv_info)
+        layout.addLayout(elv_layout)
 
         # Toggle measurements display
         self.toggle_measurements = QPushButton("Show Measurements")
@@ -401,7 +426,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
         if scale_info['calibrated']:
             self.scale_status.setText("✓ Scale Calibrated")
             self.scale_status.setStyleSheet("color: green; font-weight: bold;")
-            self.scale_value.setText(f"{scale_info['pixels_per_cm']:.4f} pixels/cm")
+            self.scale_value.setText(f"Homography calibrated (~{scale_info['pixels_per_cm']:.2f} px/cm)")
             self.toggle_measurements.setEnabled(True)
         else:
             self.scale_status.setText("No scale")
@@ -425,7 +450,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 success = self.canvas.measurement_calc.set_apriltag_size(size_m)
                 print(f"DEBUG: set_apriltag_size({size_m}) returned {success}")
                 
-                # If we successfully recalculated (meaning we already have avg_pixels)
+                # If we successfully recomputed the homography (meaning we already have raw corners)
                 if success:
                     scale_info = self.canvas.measurement_calc.get_scale_info()
                     self.on_scale_calibrated(scale_info)
@@ -624,18 +649,13 @@ class HandAnnotationWithMeasurements(QMainWindow):
             self.plot_canvas.draw()
             return
 
-        # Get pixels per cm for conversion
-        pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+        # Get the measurement calculator for homography-based conversion
+        calc = self.canvas.measurement_calc
 
-        # Convert pixel coordinates to cm
+        # Convert pixel coordinates to cm using the homography (perspective-correct)
         def pixels_to_cm(points):
-            """Convert list of pixel coordinates to cm."""
-            cm_points = []
-            for x, y in points:
-                cm_x = x / pixels_per_cm
-                cm_y = y / pixels_per_cm
-                cm_points.append((cm_x, cm_y))
-            return cm_points
+            """Convert list of pixel coordinates to cm via homography."""
+            return [calc.pixel_point_to_cm(float(x), float(y)) for x, y in points]
 
         crease1_cm = pixels_to_cm(crease1_points)
         crease2_cm = pixels_to_cm(crease2_points)
@@ -914,11 +934,12 @@ class HandAnnotationWithMeasurements(QMainWindow):
             return
 
         try:
-            pixels_per_cm = self.canvas.measurement_calc.pixels_per_cm
+            calc = self.canvas.measurement_calc
 
-            # Helper to convert to cm
+            # Helper to convert to cm via homography (perspective-correct)
             def to_cm(p):
-                return np.array([p[0] / pixels_per_cm, p[1] / pixels_per_cm])
+                x_cm, y_cm = calc.pixel_point_to_cm(float(p[0]), float(p[1]))
+                return np.array([x_cm, y_cm])
 
             # Extract segments and calculate centers (in cm)
             centers_c1 = []
@@ -982,7 +1003,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 header = [
                     'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
                     'C1_SEG_1_2', 'C1_SEG_2_3', 'MI_LEN', 'MR_LEN', 
-                    'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA', 'HAND'
+                    'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA', 'ELV_ANG', 'HAND'
                 ]
                 writer.writerow(header)
                 
@@ -1010,8 +1031,9 @@ class HandAnnotationWithMeasurements(QMainWindow):
                     ])
                 else:
                     data_row.extend(['0.00', '0.00', '0.00'])
-                    
-                # Add Hand Type
+
+                # Elevation angle (metadata) and Hand Type
+                data_row.append(str(self.elv_ang_input.value()))
                 data_row.append(self.canvas.detected_hand)
                     
                 writer.writerow(data_row)

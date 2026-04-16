@@ -725,14 +725,25 @@ class HandAnnotationWithMeasurements(QMainWindow):
                 ax.text(center[0], center[1] - 0.3, segment_labels[i],
                        ha='center', fontsize=11, color='#00ffff', weight='bold')
 
-        # Add dimension annotations for Crease 2 (along crease)
-        c2_labels = ['MI_LEN', 'MR_LEN']
+        # Add dimension annotations for Crease 1 (along crease) — Cyan labels
+        c1_labels = ['MI_LEN_C1', 'MR_LEN_C1']
+        for i in range(min(len(crease1_centers) - 1, 2)):
+            c1 = crease1_centers[i]
+            c2 = crease1_centers[i + 1]
+            dist = float(np.linalg.norm(c2 - c1))
+            mid = (c1 + c2) / 2
+            ax.text(mid[0], mid[1] + 0.35, f'{c1_labels[i]}: {dist:.2f} cm',
+                   ha='center', fontsize=9, color='#00ffff', weight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#00ffff', linewidth=1))
+
+        # Add dimension annotations for Crease 2 (along crease) — Yellow labels
+        c2_labels = ['MI_LEN_C2', 'MR_LEN_C2']
         for i in range(min(len(crease2_centers) - 1, 2)):
             c1 = crease2_centers[i]
             c2 = crease2_centers[i + 1]
             dist = float(np.linalg.norm(c2 - c1))
             mid = (c1 + c2) / 2
-            ax.text(mid[0], mid[1] - 0.3, f'{c2_labels[i]}: {dist:.2f} cm',
+            ax.text(mid[0], mid[1] - 0.35, f'{c2_labels[i]}: {dist:.2f} cm',
                    ha='center', fontsize=9, color='#ffff00', weight='bold',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='black', edgecolor='#ffff00', linewidth=1))
 
@@ -997,29 +1008,28 @@ class HandAnnotationWithMeasurements(QMainWindow):
             with open(file_path, 'w', newline='') as f:
                 writer = csv.writer(f)
                 
-                # Header row: Mapping geometric values to specific clinical landmark names
-                # MI_LEN and MR_LEN specifically use Crease 2 distances as per user requirement.
-                # C1_SEG_1_2 and C1_SEG_2_3 use Crease 1 distances.
+                # Header row: _C1/_C2 suffix indicates which crease the along-crease distance comes from.
                 header = [
-                    'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG', 
-                    'C1_SEG_1_2', 'C1_SEG_2_3', 'MI_LEN', 'MR_LEN', 
+                    'IB1_ANG', 'MB1_ANG', 'MB2_ANG', 'RB2_ANG',
+                    'MI_LEN_C1', 'MR_LEN_C1',
+                    'MI_LEN_C2', 'MR_LEN_C2',
                     'V2_LEN', 'C2I_DIA', 'C2M_DIA', 'C2R_DIA', 'ELV_ANG', 'HAND'
                 ]
                 writer.writerow(header)
                 
-                # Calculate required distances (Sequential Euclidean distances between segment centers)
+                # Calculate required distances (Euclidean between consecutive segment centers)
                 dist_c1_seg1 = np.linalg.norm(centers_c1[1] - centers_c1[0]) if len(centers_c1) > 1 else 0
                 dist_c1_seg2 = np.linalg.norm(centers_c1[2] - centers_c1[1]) if len(centers_c1) > 2 else 0
                 dist_c2_seg1 = np.linalg.norm(centers_c2[1] - centers_c2[0]) if len(centers_c2) > 1 else 0
                 dist_c2_seg2 = np.linalg.norm(centers_c2[2] - centers_c2[1]) if len(centers_c2) > 2 else 0
                 dist_v2 = np.linalg.norm(centers_c2[1] - centers_c1[1])
-                
+
                 # Prepare data row
                 data_row = [
                     f"{ang1:.2f}", f"{ang2:.2f}", f"{ang3:.2f}", f"{ang4:.2f}",
-                    f"{dist_c1_seg1:.2f}", f"{dist_c1_seg2:.2f}", 
-                    f"{dist_c2_seg1:.2f}", f"{dist_c2_seg2:.2f}",
-                    f"{dist_v2:.2f}"
+                    f"{dist_c1_seg1:.2f}", f"{dist_c1_seg2:.2f}",  # MI_LEN_C1 / MR_LEN_C1
+                    f"{dist_c2_seg1:.2f}", f"{dist_c2_seg2:.2f}",  # MI_LEN_C2 / MR_LEN_C2
+                    f"{dist_v2:.2f}"                                 # V2_LEN
                 ]
                 
                 # Add C2 segment lengths

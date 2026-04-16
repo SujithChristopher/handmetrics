@@ -237,6 +237,15 @@ class HandAnnotationWithMeasurements(QMainWindow):
         self.toggle_mp_plots.clicked.connect(self.toggle_mp_plots_display)
         layout.addWidget(self.toggle_mp_plots)
 
+        # Height Correction Toggle
+        self.height_corr_check = QPushButton("Enable Height Correction")
+        self.height_corr_check.setCheckable(True)
+        self.height_corr_check.setStyleSheet("background-color: #d0d0d0; color: #000000; font-weight: bold; font-size: 10px; padding: 6px; border-radius: 3px;")
+        self.height_corr_check.setToolTip("Corrects measurement for hand thickness assuming hand is flat on the table.")
+        self.height_corr_check.setMinimumHeight(32)
+        self.height_corr_check.clicked.connect(self.toggle_height_correction)
+        layout.addWidget(self.height_corr_check)
+
         # Action buttons
         layout.addSpacing(15)
 
@@ -426,7 +435,12 @@ class HandAnnotationWithMeasurements(QMainWindow):
         if scale_info['calibrated']:
             self.scale_status.setText("✓ Scale Calibrated")
             self.scale_status.setStyleSheet("color: green; font-weight: bold;")
-            self.scale_value.setText(f"Homography calibrated (~{scale_info['pixels_per_cm']:.2f} px/cm)")
+            
+            dist_txt = ""
+            if scale_info.get('pose_available'):
+                dist_txt = f" (Dist: {scale_info['camera_distance_cm']:.1f} cm)"
+                
+            self.scale_value.setText(f"Homography calibrated{dist_txt}")
             self.toggle_measurements.setEnabled(True)
         else:
             self.scale_status.setText("No scale")
@@ -478,6 +492,21 @@ class HandAnnotationWithMeasurements(QMainWindow):
         else:
             self.toggle_mp_plots.setStyleSheet("background-color: #d0d0d0; color: #000000;")
         self.canvas.update()
+
+    def toggle_height_correction(self):
+        """Toggle perspective height correction."""
+        is_checked = self.height_corr_check.isChecked()
+        self.canvas.enable_height_correction = is_checked
+        if is_checked:
+            self.height_corr_check.setStyleSheet("background-color: #00bcd4; color: white;")
+        else:
+            self.height_corr_check.setStyleSheet("background-color: #d0d0d0; color: #000000;")
+        
+        # Update everything
+        self.canvas.update()
+        self.update_measurements_display()
+        if self.view_mode == "plot":
+            self.update_geometric_plot()
 
     def update_point_counter(self):
         """Update the point counter display."""
@@ -651,32 +680,40 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
         # Get the measurement calculator for homography-based conversion
         calc = self.canvas.measurement_calc
+        enable_corr = self.canvas.enable_height_correction
 
-        # Convert pixel coordinates to cm using the homography (perspective-correct)
-        def pixels_to_cm(points):
-            """Convert list of pixel coordinates to cm via homography."""
-            return [calc.pixel_point_to_cm(float(x), float(y)) for x, y in points]
-
-        crease1_cm = pixels_to_cm(crease1_points)
-        crease2_cm = pixels_to_cm(crease2_points)
-
-        # Extract first 3 segments (index, middle, ring fingers)
-        # seg1: p0-p1, seg2: p2-p3, seg3: p4-p5
-        def get_segments(points):
-            """Extract first 3 segments and their centers."""
-            segments = []
-            centers = []
+        # Extract first 3 segments (index, middle, ring fingers) and their corrected centers/points
+        def get_corrected_segment_data(px_points):
+            """Extract first 3 segments with projective correction."""
+            segs_cm = []
+            centers_cm = []
+            lengths_cm = []
+            
             for i in range(0, 6, 2):  # 0, 2, 4
-                if i + 1 < len(points):
-                    p0 = np.array(points[i])
-                    p1 = np.array(points[i + 1])
-                    center = (p0 + p1) / 2.0
-                    segments.append((p0, p1))
-                    centers.append(center)
-            return segments, centers
+                if i + 1 < len(px_points):
+                    p0_px = px_points[i]
+                    p1_px = px_points[i+1]
+                    
+                    # 1. Get raw distance for height estimate
+                    raw_dist = calc.pixel_distance_to_cm(p0_px[0], p0_px[1], p1_px[0], p1_px[1], h=0)
+                    
+                    # 2. Determine height
+                    h = (raw_dist / 2.0) if enable_corr else 0.0
+                    
+                    # 3. Project to height
+                    p0_cm = np.array(calc.pixel_point_to_cm_at_height(p0_px[0], p0_px[1], h))
+                    p1_cm = np.array(calc.pixel_point_to_cm_at_height(p1_px[0], p1_px[1], h))
+                    
+                    center = (p0_cm + p1_cm) / 2.0
+                    length = np.linalg.norm(p1_cm - p0_cm)
+                    
+                    segs_cm.append((p0_cm, p1_cm))
+                    centers_cm.append(center)
+                    lengths_cm.append(length)
+            return segs_cm, centers_cm, lengths_cm
 
-        crease1_segs, crease1_centers = get_segments(crease1_cm)
-        crease2_segs, crease2_centers = get_segments(crease2_cm)
+        crease1_segs, crease1_centers, crease1_lens = get_corrected_segment_data(crease1_points)
+        crease2_segs, crease2_centers, crease2_lens = get_corrected_segment_data(crease2_points)
 
         # Plot crease 1 segments and centers (Cyan - CAD style)
         c1_dia_labels = ['C1I_DIA', 'C1M_DIA', 'C1R_DIA']
@@ -946,23 +983,35 @@ class HandAnnotationWithMeasurements(QMainWindow):
 
         try:
             calc = self.canvas.measurement_calc
+            enable_corr = self.canvas.enable_height_correction
 
-            # Helper to convert to cm via homography (perspective-correct)
-            def to_cm(p):
-                x_cm, y_cm = calc.pixel_point_to_cm(float(p[0]), float(p[1]))
-                return np.array([x_cm, y_cm])
+            # Helper to get corrected segment data
+            def get_corrected_points(px_p1, px_p2):
+                # 1. Raw distance for height
+                raw = calc.pixel_distance_to_cm(px_p1[0], px_p1[1], px_p2[0], px_p2[1], h=0)
+                h = (raw / 2.0) if enable_corr else 0.0
+                
+                # 2. Project
+                p1_cm = np.array(calc.pixel_point_to_cm_at_height(px_p1[0], px_p1[1], h))
+                p2_cm = np.array(calc.pixel_point_to_cm_at_height(px_p2[0], px_p2[1], h))
+                return p1_cm, p2_cm
 
             # Extract segments and calculate centers (in cm)
             centers_c1 = []
             centers_c2 = []
-            for i in range(0, 6, 2):
-                p1_c1 = to_cm(crease1_points[i])
-                p2_c1 = to_cm(crease1_points[i+1])
-                centers_c1.append((p1_c1 + p2_c1) / 2.0)
+            diameters_c1 = []
+            diameters_c2 = []
 
-                p1_c2 = to_cm(crease2_points[i])
-                p2_c2 = to_cm(crease2_points[i+1])
+            for i in range(0, 6, 2):
+                # Crease 1
+                p1_c1, p2_c1 = get_corrected_points(crease1_points[i], crease1_points[i+1])
+                centers_c1.append((p1_c1 + p2_c1) / 2.0)
+                diameters_c1.append(np.linalg.norm(p1_c1 - p2_c1))
+
+                # Crease 2
+                p1_c2, p2_c2 = get_corrected_points(crease2_points[i], crease2_points[i+1])
                 centers_c2.append((p1_c2 + p2_c2) / 2.0)
+                diameters_c2.append(np.linalg.norm(p1_c2 - p2_c2))
 
             # Midpoints of verticals (P1, P2, P3)
             P = []
@@ -994,15 +1043,7 @@ class HandAnnotationWithMeasurements(QMainWindow):
             ang3 = calc_angle(Verticals[1], Ref23)
             ang4 = calc_angle(Verticals[2], -Ref23)
 
-            # Calculate C2 segment lengths (individual segment distances, not centers)
-            # Segment 1 (Index): p0-p1, Segment 2 (Middle): p2-p3, Segment 3 (Ring): p4-p5
-            c2_seg_lengths = []
-            for i in range(0, 6, 2):
-                if i + 1 < len(crease2_points):
-                    p1 = to_cm(crease2_points[i])
-                    p2 = to_cm(crease2_points[i+1])
-                    seg_length = np.linalg.norm(p2 - p1)
-                    c2_seg_lengths.append(seg_length)
+            c2_seg_lengths = diameters_c2
 
                 # Write to CSV in column-wise format
             with open(file_path, 'w', newline='') as f:

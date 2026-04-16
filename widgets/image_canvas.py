@@ -47,6 +47,7 @@ class ImageCanvas(QFrame):
         self.mp_landmarks = []
         self.show_mediapipe_plots = False
         self.show_measurements = False
+        self.enable_height_correction = False  # New: Perspective correction for elevated hand
         
         # Display state
         self.image_rect = QRect()  # The actual rectangle where the image is drawn
@@ -126,10 +127,13 @@ class ImageCanvas(QFrame):
 
                     # Calibrate measurement using first detected tag
                     if i == 0:
-                        if self.measurement_calc.calibrate_from_apriltag(corner[0]):
+                        h, w = self.image.shape[:2]
+                        if self.measurement_calc.calibrate_from_apriltag(corner[0], img_w=w, img_h=h):
                             scale_info = self.measurement_calc.get_scale_info()
                             self.scale_calibrated.emit(scale_info)
                             print(f"✓ Homography calibrated from AprilTag (approx {scale_info['pixels_per_cm']:.2f} px/cm)")
+                            if scale_info.get('pose_available'):
+                                print(f"✓ Pose estimated: distance ~{scale_info['camera_distance_cm']:.1f} cm")
 
             self.apriltag_detected.emit(self.detected_tags)
         except Exception as e:
@@ -297,10 +301,20 @@ class ImageCanvas(QFrame):
                         p1 = np.array(points[i])
                         p2 = np.array(points[i + 1])
 
+                        # Initial raw distance calculation (used for height estimate)
                         pixel_dist = float(np.linalg.norm(p2 - p1))
+                        raw_cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                            float(p1[0]), float(p1[1]),
+                            float(p2[0]), float(p2[1]),
+                            h=0.0
+                        )
+
+                        current_h = (raw_cm_dist / 2.0) if self.enable_height_correction else 0.0
+                        
                         cm_dist = self.measurement_calc.pixel_distance_to_cm(
                             float(p1[0]), float(p1[1]),
                             float(p2[0]), float(p2[1]),
+                            h=current_h
                         )
 
                         distance_info = {
@@ -360,9 +374,16 @@ class ImageCanvas(QFrame):
                             p1 = np.array(points[i])
                             p2 = np.array(points[i+1])
                             pixel_dist = float(np.linalg.norm(p2 - p1))
+                            raw_cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                                float(p1[0]), float(p1[1]),
+                                float(p2[0]), float(p2[1]),
+                                h=0.0
+                            )
+                            current_h = (raw_cm_dist / 2.0) if self.enable_height_correction else 0.0
                             cm_dist = self.measurement_calc.pixel_distance_to_cm(
                                 float(p1[0]), float(p1[1]),
                                 float(p2[0]), float(p2[1]),
+                                h=current_h
                             )
 
                             # Midpoint for text
@@ -491,9 +512,16 @@ class ImageCanvas(QFrame):
                             p1 = np.array(points[i])
                             p2 = np.array(points[i+1])
                             pixel_dist = float(np.linalg.norm(p2 - p1))
+                            raw_cm_dist = self.measurement_calc.pixel_distance_to_cm(
+                                float(p1[0]), float(p1[1]),
+                                float(p2[0]), float(p2[1]),
+                                h=0.0
+                            )
+                            current_h = (raw_cm_dist / 2.0) if self.enable_height_correction else 0.0
                             cm_dist = self.measurement_calc.pixel_distance_to_cm(
                                 float(p1[0]), float(p1[1]),
                                 float(p2[0]), float(p2[1]),
+                                h=current_h
                             )
 
                             # Midpoint for text

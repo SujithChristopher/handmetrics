@@ -1,0 +1,41 @@
+name: Build for Windows 10
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # windows-2019 is based on Windows Server 2019, which shares the Windows 10 kernel.
+    # Building here ensures maximum compatibility with Windows 10 systems,
+    # avoiding issues caused by building on Windows 11 / Server 2022.
+    runs-on: windows-2019
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: uv sync
+        
+      - name: Build with PyInstaller
+        run: uv run pyinstaller main.spec
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: handmetrics-windows10
+          path: dist/main.exe

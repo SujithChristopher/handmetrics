@@ -130,3 +130,11 @@ The `save_landmarks` function produces a structure optimized for ML training on 
     *   **Ang3**: Vertical 2 (Middle) vs Line 2-3.
     *   **Ang4**: Vertical 3 (Ring) vs Line 2-3.
 *   **CSV Export**: Saves these angles along with all segment lengths and cross-crease distances to a structured CSV file for analysis.
+
+## 🛠️ Developmental Rules
+
+- **Package Manager**: Strictly use `uv` for all dependency management.
+  - Use `uv add <package>` and `uv remove <package>`.
+  - Avoid using `pip` directly.
+- **Execution**: Always run scripts using `uv run <script>.py`.
+- **Environment**: Use `uv sync` to maintain environment consistency.

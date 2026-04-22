@@ -24,10 +24,11 @@ python main.py
 ```bash
 python main.py
 ```
-- ✅ Real-time hand joint annotation
+- ✅ Real-time hand joint annotation (6 points per crease)
 - ✅ AprilTag auto-detection for pixel-to-cm conversion
-- ✅ Measurement display on image
-- ✅ **Generate comprehensive PDF reports** with annotated images and measurements
+- ✅ **Geometric Analysis View**: CAD-style plot showing angles and segment centers
+- ✅ **CSV Export**: Clinical analysis data (IB1_ANG, MI_LEN, etc.)
+- ✅ **Generate professional PDF reports** with annotated images and measurements
 - ✅ Professional A4 PDF format, single-page output
 - ✅ Reports saved to `Documents/HandMetrics/reports/`
 
@@ -57,12 +58,9 @@ Complete hand annotation and measurement system with PDF report generation.
   - Clear all landmarks
 - **Single Hand Mode**: Focused on one hand per annotation session
 
-**Supported Fingers:**
-- Thumb
-- Index
-- Middle
-- Ring
-- Pinky
+- **Crease 1**: Proximal crease (Cyan) - use 6 points (Index, Middle, Ring segments)
+- **Crease 2**: Distal crease (Yellow) - use 6 points (Index, Middle, Ring segments)
+- **Crease 3**: Optional third crease (Red)
 
 **Usage:**
 ```bash
@@ -85,21 +83,17 @@ python main.py
 
 ```
 handmetrics/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                       # GitHub CI/CD workflow
-│       └── release.yml                  # Release workflow
-├── images/                              # Input images folder
-├── main.py                              # ⭐ Main HandMetrics GUI application
-├── requirements.txt                     # Python dependencies
-├── .gitignore                           # Git ignore rules
-├── README.md                            # This file
-└── CLAUDE.md                            # Development guide
-
-# Output Directories (Created Automatically)
-~/Documents/
-└── HandMetrics/
-    └── reports/                         # Generated PDF reports
+├── core/                # 🧠 Business Logic
+│   ├── measurement.py   # MeasurementCalculator (Scale & Calibration)
+│   └── reporting.py     # ReportGenerator (PDF Logic)
+├── widgets/             # 🎨 UI Components
+│   └── image_canvas.py  # ImageCanvas (Drawing & Detection)
+├── ui/                  # 🖼️ Application Windows
+│   └── main_window.py   # HandAnnotationWithMeasurements (Main UI)
+├── images/              # Input images folder
+├── main.py              # ⭐ Clean Entry Point
+├── requirements.txt     # Python dependencies
+└── ...
 ```
 
 ---
@@ -176,13 +170,15 @@ Landmarks 17-20: Pinky (MCP, PIP, DIP, Tip)
 
 ## 🎨 Color Coding
 
-| Finger | Color | Purpose |
-|--------|-------|---------|
-| Thumb | Blue | Easy identification |
-| Index | Green | Natural association |
-| Middle | Red | Distinct from others |
-| Ring | Cyan | Unique color |
-| Pinky | Magenta | Unique color |
+| Feature | Label | Source |
+|---------|-------|--------|
+| Index Base 1 Angle | IB1_ANG | V1 (Index) vs Ref1-2 |
+| Middle Base 1 Angle | MB1_ANG | V2 (Middle) vs -Ref1-2 |
+| Middle Base 2 Angle | MB2_ANG | V2 (Middle) vs Ref2-3 |
+| Ring Base 2 Angle | RB2_ANG | V3 (Ring) vs -Ref2-3 |
+| Middle-Index Length | MI_LEN | Crease 2 Segment Distance |
+| Middle-Ring Length | MR_LEN | Crease 2 Segment Distance |
+| Crease 1 Segments | C1_SEG_X | Crease 1 Distances |
 
 ---
 
